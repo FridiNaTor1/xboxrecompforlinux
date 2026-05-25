@@ -1,9 +1,12 @@
 """
 Recompiler configuration - section mappings and constants.
 
-NOTE: These mappings must match the target XBE. Currently configured for
-Xbox Dashboard build 3944 (xboxdash.xbe).
+The values below are fallbacks. For real game work, call
+load_analysis_json() with the JSON produced by tools/xbe_parser/xbe_parser.py
+so VA-to-file-offset conversion matches the target XBE.
 """
+
+import json
 
 # Section virtual address → file offset mappings
 # (name, va_start, va_size, raw_addr, raw_size)
@@ -38,6 +41,60 @@ DATA_VA_START = 0x00110220
 DATA_VA_END = 0x00170000
 KERNEL_THUNK_ADDR = 0x00012000
 ENTRY_POINT = 0x00052A81
+
+
+def _parse_int(value):
+    if isinstance(value, int):
+        return value
+    return int(value, 16 if str(value).lower().startswith("0x") else 10)
+
+
+def load_analysis_json(path):
+    """Load section layout from xbe_parser --json output."""
+    global SECTIONS
+    global TEXT_VA_START, TEXT_VA_END
+    global RDATA_VA_START, RDATA_VA_END
+    global DATA_VA_START, DATA_VA_END
+    global KERNEL_THUNK_ADDR, ENTRY_POINT
+
+    with open(path, "r", encoding="utf-8") as f:
+        analysis = json.load(f)
+
+    sections = []
+    data_ranges = []
+    text_range = None
+    for sec in analysis.get("sections", []):
+        name = sec["name"]
+        va = _parse_int(sec["virtual_addr"])
+        size = int(sec["virtual_size"])
+        raw = _parse_int(sec["raw_addr"])
+        sections.append((name, va, size, raw))
+
+        if name == ".text":
+            text_range = (va, va + size)
+        if sec.get("writable") or not sec.get("executable"):
+            data_ranges.append((va, va + size))
+
+    if not sections:
+        raise ValueError(f"No sections found in analysis JSON: {path}")
+
+    SECTIONS = sections
+    if text_range:
+        TEXT_VA_START, TEXT_VA_END = text_range
+    else:
+        executable = [(va, va + size) for name, va, size, raw in sections]
+        TEXT_VA_START = min(start for start, _ in executable)
+        TEXT_VA_END = max(end for _, end in executable)
+
+    if data_ranges:
+        DATA_VA_START = min(start for start, _ in data_ranges)
+        DATA_VA_END = max(end for _, end in data_ranges)
+        RDATA_VA_START = DATA_VA_START
+        RDATA_VA_END = DATA_VA_END
+
+    KERNEL_THUNK_ADDR = _parse_int(analysis.get("kernel_thunk_addr", KERNEL_THUNK_ADDR))
+    ENTRY_POINT = _parse_int(analysis.get("entry_point", ENTRY_POINT))
+    return analysis
 
 
 def va_to_file_offset(va):

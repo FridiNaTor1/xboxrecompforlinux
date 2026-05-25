@@ -10,6 +10,16 @@ pip install capstone    # x86 disassembly engine
 
 Python 3.10+ required. On Windows, use `py -3` instead of `python3`.
 
+Optional symbol support:
+
+```bash
+# Direct PDB parsing
+pip install pdbparse construct pefile
+
+# Optional fallback backend for PDB files
+llvm-pdbutil --version
+```
+
 ## Pipeline Overview
 
 ```
@@ -51,6 +61,43 @@ default.xbe
         gen/recomp_funcs.h
         gen/recomp_stubs.c
 ```
+
+If a debug build includes symbols, generate seed functions before disassembly:
+
+```bash
+# MAP file
+python3 -m tools.symbols.map_parser game_files/game.map \
+  --bias 0x0 \
+  --json game_files/map_symbols.json \
+  --seeds game_files/map_seed_functions.json
+
+# PDB file, using a matching MAP file to derive segment bases.
+# Uses pdbparse by default and falls back to llvm-pdbutil when available.
+python3 -m tools.symbols.pdb_parser game_files/game.pdb \
+  --map-file game_files/game.map \
+  --bias 0x0 \
+  --json game_files/pdb_symbols.json \
+  --seeds game_files/pdb_seed_functions.json
+
+python3 -m tools.symbols.merge_seeds \
+  game_files/map_seed_functions.json \
+  game_files/pdb_seed_functions.json \
+  --out game_files/symbol_seed_functions.json
+
+python3 -m tools.disasm game_files/default.xbe \
+  --analysis-json game_files/default_analysis.json \
+  --text-only \
+  --seed-functions game_files/symbol_seed_functions.json
+```
+
+`--bias` is game-specific: it converts symbol VAs to XBE VAs with
+`xbe_va = map_va - bias`. Use `0` when the symbol VA space already matches
+the XBE. When only a PDB is available, pass segment bases manually with
+`--segment-base 1=0x...`.
+
+Seed names are carried into `functions.json` and generated C as stable
+`fn_<VA>_<symbol>` identifiers. The original decorated MAP/PDB symbol is kept
+as `symbol_name` and emitted in function comments.
 
 ## Tool Details
 

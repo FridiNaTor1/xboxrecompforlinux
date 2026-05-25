@@ -5,6 +5,9 @@
  * non-rendering paths while a real Vulkan/DXVK-backed renderer is built.
  */
 #include "d3d8_xbox.h"
+#ifdef XBOXRECOMP_VULKAN_GRAPHICS
+#include "d3d8_vulkan_host.h"
+#endif
 #include <stdlib.h>
 #include <string.h>
 
@@ -195,7 +198,14 @@ static HRESULT __stdcall dev_get_caps(IDirect3DDevice8 *self, void *p) { (void)s
 static HRESULT __stdcall dev_get_display_mode(IDirect3DDevice8 *self, void *p) { (void)self; if (p) memset(p, 0, 32); return S_OK; }
 static HRESULT __stdcall dev_get_creation_params(IDirect3DDevice8 *self, void *p) { (void)self; if (p) memset(p, 0, 32); return S_OK; }
 static HRESULT __stdcall dev_reset(IDirect3DDevice8 *self, D3DPRESENT_PARAMETERS *pp) { (void)self; (void)pp; return S_OK; }
-static HRESULT __stdcall dev_present(IDirect3DDevice8 *self, const RECT *src, const RECT *dst, HWND wnd, void *dirty) { (void)self; (void)src; (void)dst; (void)wnd; (void)dirty; return S_OK; }
+static HRESULT __stdcall dev_present(IDirect3DDevice8 *self, const RECT *src, const RECT *dst, HWND wnd, void *dirty)
+{
+    (void)self; (void)src; (void)dst; (void)wnd; (void)dirty;
+#ifdef XBOXRECOMP_VULKAN_GRAPHICS
+    d3d8_vulkan_host_present();
+#endif
+    return S_OK;
+}
 static HRESULT __stdcall dev_get_backbuffer(IDirect3DDevice8 *self, INT i, DWORD type, IDirect3DSurface8 **out) { (void)self; (void)i; (void)type; return tex_get_surface_level(NULL, 0, out); }
 static HRESULT __stdcall dev_clear(IDirect3DDevice8 *self, DWORD c, const D3DRECT *r, DWORD f, D3DCOLOR col, float z, DWORD s) { (void)self; (void)c; (void)r; (void)f; (void)col; (void)z; (void)s; return S_OK; }
 static HRESULT __stdcall dev_set_transform(IDirect3DDevice8 *self, D3DTRANSFORMSTATETYPE st, const D3DMATRIX *m) { (void)self; (void)st; (void)m; return S_OK; }
@@ -277,7 +287,14 @@ static void __stdcall dev_get_gamma(IDirect3DDevice8 *self, D3DGAMMARAMP *r) { (
 static HRESULT __stdcall dev_set_palette(IDirect3DDevice8 *self, DWORD n, const void *e) { (void)self; (void)n; (void)e; return S_OK; }
 static HRESULT __stdcall dev_begin_push(IDirect3DDevice8 *self, DWORD count, DWORD **out) { (void)self; if (out) *out = calloc(count ? count : 1, sizeof(DWORD)); return out && *out ? S_OK : E_OUTOFMEMORY; }
 static HRESULT __stdcall dev_end_push(IDirect3DDevice8 *self, DWORD *p) { (void)self; free(p); return S_OK; }
-static HRESULT __stdcall dev_swap(IDirect3DDevice8 *self, DWORD flags) { (void)self; (void)flags; return S_OK; }
+static HRESULT __stdcall dev_swap(IDirect3DDevice8 *self, DWORD flags)
+{
+    (void)self; (void)flags;
+#ifdef XBOXRECOMP_VULKAN_GRAPHICS
+    d3d8_vulkan_host_present();
+#endif
+    return S_OK;
+}
 
 static HRESULT __stdcall d3d8_qi(IDirect3D8 *self, const IID *riid, void **ppv) { return qi_void(self, riid, ppv); }
 static ULONG __stdcall d3d8_addref(IDirect3D8 *self) { (void)self; return (ULONG)InterlockedIncrement(&g_d3d8_ref); }
@@ -289,6 +306,9 @@ static HRESULT __stdcall d3d8_create_device(IDirect3D8 *self, UINT adapter, DWOR
         g_viewport.Width = pp->BackBufferWidth ? pp->BackBufferWidth : 640;
         g_viewport.Height = pp->BackBufferHeight ? pp->BackBufferHeight : 480;
     }
+#ifdef XBOXRECOMP_VULKAN_GRAPHICS
+    d3d8_vulkan_host_init(g_viewport.Width, g_viewport.Height);
+#endif
     g_device.lpVtbl = &g_device_vtbl;
     g_device_ref = 1;
     if (out) *out = &g_device;
@@ -354,4 +374,7 @@ IDirect3DDevice8 *xbox_GetD3DDevice(void)
 
 void d3d8_PresentFrame(void)
 {
+#ifdef XBOXRECOMP_VULKAN_GRAPHICS
+    d3d8_vulkan_host_present();
+#endif
 }

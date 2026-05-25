@@ -221,9 +221,10 @@ static inline void src_float_to_short_array(const float *in, int16_t *out,
 /* ============================================================
  * SDL Audio stubs
  *
- * The monitor output uses SDL. We stub it; actual audio output
- * will be connected via WASAPI separately.
+ * These are only for builds that do not compile the real SDL backend.
  * ============================================================ */
+
+#ifndef XBOXRECOMP_AUDIO_BACKEND_SDL
 
 typedef void SDL_AudioStream;
 typedef uint32_t SDL_AudioDeviceID;
@@ -265,6 +266,8 @@ static inline void SDL_SetAudioStreamGain(SDL_AudioStream *s, float g) {
     (void)s; (void)g;
 }
 static inline int SDL_GetNumLogicalCPUCores(void) { return 1; }
+
+#endif
 
 /* ============================================================
  * VM state / migration stubs

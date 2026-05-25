@@ -1,15 +1,16 @@
-# xbox_input — Xbox Gamepad to XInput
+# xbox_input — Xbox Gamepad Input
 
-Maps the Xbox controller API to Windows XInput. The original Xbox used `XInputGetState` with a slightly different structure layout than the XInput API on Windows. This layer translates between them.
+Maps the Xbox controller API to host controller APIs. The original Xbox used `XInputGetState` with a slightly different structure layout than modern XInput. This layer translates between them.
 
-On Linux this currently builds against a small XInput compatibility shim that reports controllers as disconnected. Replace that shim with SDL, evdev, or hidraw input when gameplay bring-up needs real controls.
+Windows uses XInput. Linux uses SDL2 GameController, so DualSense/PS5 pads work through SDL's controller database and are exposed as Xbox-style A/B/X/Y, triggers, sticks, bumpers, and rumble.
 
 ## Files
 
 | File | LOC | Purpose |
 |------|-----|---------|
 | `xinput_xbox.h` | 189 | Public header — types, button constants, function prototypes |
-| `xinput_device.c` | 23 | Implementation (maps Xbox calls to Windows XInput) |
+| `xinput_device.c` | 23 | Windows implementation (maps Xbox calls to XInput) |
+| `xinput_device_sdl.c` | 260+ | Linux SDL2 GameController implementation |
 
 ## Quick Start
 

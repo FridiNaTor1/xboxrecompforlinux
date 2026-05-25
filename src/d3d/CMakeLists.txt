@@ -10,6 +10,11 @@ if(XBOXRECOMP_GRAPHICS_BACKEND STREQUAL "d3d11")
         d3d8_combiners.c
         d3d8_vsh.c
     )
+elseif(XBOXRECOMP_GRAPHICS_BACKEND STREQUAL "vulkan")
+    add_library(xbox_d3d8 STATIC
+        d3d8_null.c
+        d3d8_vulkan_host.c
+    )
 else()
     add_library(xbox_d3d8 STATIC
         d3d8_null.c
@@ -24,6 +29,9 @@ target_include_directories(xbox_d3d8 PUBLIC
 
 if(XBOXRECOMP_GRAPHICS_BACKEND STREQUAL "d3d11")
     target_link_libraries(xbox_d3d8 PUBLIC d3d11 dxgi dxguid d3dcompiler)
+elseif(XBOXRECOMP_GRAPHICS_BACKEND STREQUAL "vulkan")
+    target_link_libraries(xbox_d3d8 PUBLIC PkgConfig::SDL2 Vulkan::Vulkan)
+    target_compile_definitions(xbox_d3d8 PUBLIC XBOXRECOMP_VULKAN_GRAPHICS=1)
 else()
     target_compile_definitions(xbox_d3d8 PUBLIC XBOXRECOMP_NULL_GRAPHICS=1)
 endif()

@@ -70,7 +70,7 @@ def main():
         "--seed-functions",
         default=None,
         help="JSON file with additional function entry points to seed the detector. "
-             "Format: array of objects with 'start' field (hex address string). "
+             "Format: array of objects with 'start' field and optional 'name'/'symbol_name'. "
              "Use identified_functions.json from func_id to feed back vtable thunks.",
     )
 
@@ -117,7 +117,9 @@ def _load_seed_functions(path):
     addrs = []
     for entry in data:
         if isinstance(entry, dict) and "start" in entry:
-            addrs.append(int(entry["start"], 16))
+            seed = dict(entry)
+            seed["start"] = int(seed["start"], 16)
+            addrs.append(seed)
         elif isinstance(entry, int):
             addrs.append(entry)
     return addrs

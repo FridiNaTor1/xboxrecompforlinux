@@ -23,6 +23,10 @@
 #include "apu.h"
 #include "fpconv.h"
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 /* ============================================================
  * Globals
  * ============================================================ */
@@ -43,8 +47,8 @@ struct McpxApuDebug g_dbg_cache;
 int g_dbg_voice_monitor = -1;
 uint64_t g_dbg_muted_voices[4] = { 0 };
 
-/* Global audio mute — disables all AWD/mixer sound playback */
-volatile int g_audio_muted = 1;  /* Start muted; set to 0 to enable */
+/* Global audio mute: disables all AWD/mixer sound playback. */
+volatile int g_audio_muted = 0;
 
 /* ============================================================
  * Debug frame markers (minimal stubs)
@@ -150,8 +154,131 @@ static struct {
 } g_test_tone = { false, 0.0, 0.0, 0 };
 
 /* ============================================================
- * Monitor - waveOut audio output (replaces SDL stubs)
+ * Monitor - host audio output
  * ============================================================ */
+
+#ifdef XBOXRECOMP_AUDIO_BACKEND_SDL
+
+#include <SDL.h>
+
+#define SDL_QUEUE_LOW_BYTES  (16 * 1024)
+#define SDL_QUEUE_HIGH_BYTES (48 * 1024)
+#define SDL_OUTPUT_SAMPLES   2048
+#define MIXER_FRAME_SAMPLES  256
+
+typedef struct {
+    SDL_AudioDeviceID device;
+    int16_t buffer[SDL_OUTPUT_SAMPLES][2];
+    bool initialized;
+    int frames_written;
+} SDLAudioState;
+
+static SDLAudioState g_sdl_audio = { 0 };
+
+void mcpx_apu_monitor_init(MCPXAPUState *d, Error **errp)
+{
+    (void)errp;
+    d->monitor.stream = NULL;
+    d->monitor.queued_bytes_low = SDL_QUEUE_LOW_BYTES;
+    d->monitor.queued_bytes_high = SDL_QUEUE_HIGH_BYTES;
+
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) {
+        fprintf(stderr, "[APU] SDL audio init failed: %s\n", SDL_GetError());
+        return;
+    }
+
+    SDL_AudioSpec want;
+    SDL_AudioSpec have;
+    SDL_zero(want);
+    want.freq = 48000;
+    want.format = AUDIO_S16SYS;
+    want.channels = 2;
+    want.samples = SDL_OUTPUT_SAMPLES;
+    want.callback = NULL;
+
+    g_sdl_audio.device = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
+    if (!g_sdl_audio.device) {
+        fprintf(stderr, "[APU] SDL_OpenAudioDevice failed: %s\n", SDL_GetError());
+        return;
+    }
+
+    if (have.freq != 48000 || have.format != AUDIO_S16SYS || have.channels != 2) {
+        fprintf(stderr, "[APU] SDL audio device returned unsupported format: %d Hz, fmt=0x%x, channels=%u\n",
+                have.freq, have.format, have.channels);
+        SDL_CloseAudioDevice(g_sdl_audio.device);
+        g_sdl_audio.device = 0;
+        return;
+    }
+
+    SDL_PauseAudioDevice(g_sdl_audio.device, 0);
+    g_sdl_audio.initialized = true;
+    g_sdl_audio.frames_written = 0;
+
+    fprintf(stderr, "[APU] SDL audio output initialized (48kHz stereo 16-bit, queue backend)\n");
+}
+
+void mcpx_apu_monitor_finalize(MCPXAPUState *d)
+{
+    (void)d;
+    if (!g_sdl_audio.initialized) return;
+
+    SDL_ClearQueuedAudio(g_sdl_audio.device);
+    SDL_CloseAudioDevice(g_sdl_audio.device);
+    g_sdl_audio.device = 0;
+    g_sdl_audio.initialized = false;
+    fprintf(stderr, "[APU] SDL audio output shut down (%d frames written)\n",
+            g_sdl_audio.frames_written);
+}
+
+void mcpx_apu_monitor_frame(MCPXAPUState *d)
+{
+    if ((d->ep_frame_div + 1) % 8) {
+        return;
+    }
+
+    if (!g_sdl_audio.initialized) return;
+
+    while (SDL_GetQueuedAudioSize(g_sdl_audio.device) > SDL_QUEUE_HIGH_BYTES) {
+        qemu_mutex_unlock(&d->lock);
+        SDL_Delay(1);
+        qemu_mutex_lock(&d->lock);
+    }
+
+    int remaining = SDL_OUTPUT_SAMPLES;
+    int out_offset = 0;
+
+    while (remaining > 0) {
+        int chunk = (remaining < MIXER_FRAME_SAMPLES) ? remaining : MIXER_FRAME_SAMPLES;
+
+        memset(d->monitor.frame_buf, 0, sizeof(d->monitor.frame_buf));
+
+        if (g_test_tone.active && !g_audio_muted) {
+            for (int i = 0; i < chunk; i++) {
+                int16_t s = (int16_t)(sin(g_test_tone.phase) * g_test_tone.amplitude);
+                d->monitor.frame_buf[i][0] = s;
+                d->monitor.frame_buf[i][1] = s;
+                g_test_tone.phase += g_test_tone.phase_inc;
+                if (g_test_tone.phase >= 2.0 * M_PI)
+                    g_test_tone.phase -= 2.0 * M_PI;
+            }
+        }
+
+        if (!g_audio_muted)
+            mixer_render(d->monitor.frame_buf, chunk);
+
+        memcpy(&g_sdl_audio.buffer[out_offset], d->monitor.frame_buf,
+               chunk * 2 * sizeof(int16_t));
+        out_offset += chunk;
+        remaining -= chunk;
+    }
+
+    if (SDL_QueueAudio(g_sdl_audio.device, g_sdl_audio.buffer,
+                       sizeof(g_sdl_audio.buffer)) == 0) {
+        g_sdl_audio.frames_written++;
+    }
+}
+
+#else
 
 #include <mmsystem.h>
 #pragma comment(lib, "winmm.lib")
@@ -285,6 +412,8 @@ void mcpx_apu_monitor_frame(MCPXAPUState *d)
     g_waveout.next_buf = (idx + 1) % WAVEOUT_NUM_BUFS;
     g_waveout.frames_written++;
 }
+
+#endif
 
 /* ============================================================
  * Throttle (timing control for frame pacing)
@@ -571,10 +700,6 @@ void mcpx_apu_mmio_write(MCPXAPUState *d, uint64_t addr, uint64_t val, unsigned 
  * directly to the monitor frame_buf. This verifies that waveOut
  * output works correctly.
  * ============================================================ */
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 void mcpx_apu_play_test_tone(MCPXAPUState *d)
 {

@@ -28,6 +28,7 @@ class Function:
     section: str = ""
     confidence: float = 0.0
     detection_method: str = ""
+    symbol_name: str = ""
 
     # Call graph data
     calls_to: List[int] = field(default_factory=list)     # Functions this calls
@@ -42,7 +43,7 @@ class Function:
         return self.end - self.start
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "start": f"0x{self.start:08X}",
             "end": f"0x{self.end:08X}",
             "size": self.size,
@@ -55,6 +56,9 @@ class Function:
             "calls_to": [f"0x{a:08X}" for a in self.calls_to],
             "called_by": [f"0x{a:08X}" for a in self.called_by],
         }
+        if self.symbol_name:
+            result["symbol_name"] = self.symbol_name
+        return result
 
 
 class FunctionDetector:
@@ -297,8 +301,10 @@ class FunctionDetector:
             label = self.labels.get(start_addr)
             if label:
                 name = label.name
+                symbol_name = label.symbol_name
             else:
                 name = f"sub_{start_addr:08X}"
+                symbol_name = ""
                 self.labels.auto_name_function(
                     start_addr, sec_name, confidence)
 
@@ -309,6 +315,7 @@ class FunctionDetector:
                 section=sec_name,
                 confidence=confidence,
                 detection_method=method,
+                symbol_name=symbol_name,
                 num_instructions=num_insns,
                 has_prologue=has_prologue,
             )

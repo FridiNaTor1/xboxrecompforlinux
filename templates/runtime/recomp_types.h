@@ -43,6 +43,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdio.h>
 
 /* ================================================================
  * Memory offset
@@ -89,6 +90,10 @@ extern uint32_t g_ebx, g_esi, g_edi;
  * Similarly, __SEH_epilog reads g_seh_ebp at entry and writes it at exit.
  */
 extern uint32_t g_seh_ebp;
+
+#ifndef __debugbreak
+#define __debugbreak() do { fprintf(stderr, "[RECOMP] int3/debugbreak reached\n"); } while (0)
+#endif
 
 /* ================================================================
  * ICALL trace ring buffer (for debugging indirect calls)

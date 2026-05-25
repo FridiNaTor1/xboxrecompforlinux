@@ -1,10 +1,10 @@
 # Getting Started with Xbox Static Recompilation
 
-This guide walks you through recompiling your first Xbox game, from extracting the XBE to getting the game running. Windows is still the rendered target; Linux can now build the runtime natively for bring-up with null graphics.
+This guide walks you through recompiling your first Xbox game, from extracting the XBE to getting the game running. Windows has the D3D11 backend; Linux builds natively with SDL2 input/audio and Vulkan presentation.
 
 ## What You Need
 
-- **Windows 11/10** for the D3D11 renderer, or **Linux** for native runtime bring-up with null graphics
+- **Windows 11/10** for the D3D11 renderer, or Linux with SDL2 and Vulkan development packages
 - **Python 3.10+** with `capstone` installed (`pip install capstone`)
 - **Visual Studio 2022** with C/C++ desktop workload on Windows, or GCC/Clang on Linux
 - **CMake 3.20+**
@@ -41,7 +41,15 @@ cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build/linux -j$(nproc)
 ```
 
-Linux currently defaults to `XBOXRECOMP_GRAPHICS_BACKEND=null`, which preserves the D3D8 ABI but does not render frames.
+Linux currently defaults to `XBOXRECOMP_GRAPHICS_BACKEND=vulkan`, which creates an SDL/Vulkan presentation window. Use `-DXBOXRECOMP_GRAPHICS_BACKEND=null` for headless bring-up.
+
+If you create a local game target under `src/game/`, enable it explicitly:
+
+```bash
+cmake -S . -B build/linux-game -DCMAKE_BUILD_TYPE=RelWithDebInfo -DXBOXRECOMP_BUILD_GAME=ON
+cmake --build build/linux-game -j$(nproc)
+./build/linux-game/src/game/<your_game_target>
+```
 
 ## Step 1: Extract the XBE
 
@@ -67,7 +75,7 @@ game_files/
 ## Step 2: Parse the XBE
 
 ```bash
-py -3 -m tools.xbe_parser game_files/default.xbe
+python3 tools/xbe_parser/xbe_parser.py game_files/default.xbe --json game_files/default_analysis.json
 ```
 
 This outputs:
@@ -107,7 +115,7 @@ This classifies functions into categories:
 ## Step 5: Recompile
 
 ```bash
-py -3 -m tools.recomp game_files/default.xbe --all --split 1000
+python3 -m tools.recomp game_files/default.xbe --analysis-json game_files/default_analysis.json --all --split 1000
 ```
 
 This is the big one — it can take 5-15 minutes for a large game. Output:

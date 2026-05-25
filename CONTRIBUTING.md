@@ -6,7 +6,7 @@ Thanks for your interest in contributing to the Xbox static recompilation toolki
 
 You need:
 
-- **Windows 10/11** with Visual Studio 2022 for the D3D11 renderer, or Linux with GCC/Clang for native runtime bring-up
+- **Windows 10/11** with Visual Studio 2022 for the D3D11 renderer, or Linux with GCC/Clang plus SDL2/Vulkan development packages
 - **Visual Studio 2022** with the C/C++ workload on Windows
 - **CMake 3.20+**
 - **Python 3.10+** with `capstone` installed (`pip install capstone`)
@@ -28,7 +28,7 @@ cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build/linux -j$(nproc)
 ```
 
-Linux uses compatibility shims and the null graphics backend by default. Renderer work should add a native backend behind the existing D3D8/NV2A interfaces.
+Linux uses compatibility shims, SDL2 input/audio, and the Vulkan presentation backend by default. `-DXBOXRECOMP_GRAPHICS_BACKEND=null` is still available for headless bring-up.
 
 This produces six static libraries in `build/src/*/Release/`. See the [README](README.md) for the full architecture diagram and library descriptions.
 

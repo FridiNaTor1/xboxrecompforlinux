@@ -7,6 +7,10 @@ __pycache__/
 tools/disasm/output/
 tools/func_id/output/
 tools/recomp/output/
+xbox_kernel.log
+
+# Local game bring-up output (do not publish generated/proprietary game code)
+src/game/
 
 # Game files (user provides their own)
 game_files/

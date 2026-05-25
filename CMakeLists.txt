@@ -17,16 +17,19 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 if(UNIX AND NOT APPLE)
-    set(XBOXRECOMP_DEFAULT_GRAPHICS_BACKEND "null")
+    set(XBOXRECOMP_DEFAULT_GRAPHICS_BACKEND "vulkan")
     set(XBOXRECOMP_PLATFORM_COMPAT_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/win32_compat")
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
+    find_package(Vulkan REQUIRED)
 else()
     set(XBOXRECOMP_DEFAULT_GRAPHICS_BACKEND "d3d11")
     set(XBOXRECOMP_PLATFORM_COMPAT_INCLUDE "")
 endif()
 
 set(XBOXRECOMP_GRAPHICS_BACKEND "${XBOXRECOMP_DEFAULT_GRAPHICS_BACKEND}" CACHE STRING
-    "Graphics backend to build: d3d11 or null")
-set_property(CACHE XBOXRECOMP_GRAPHICS_BACKEND PROPERTY STRINGS d3d11 null)
+    "Graphics backend to build: d3d11, vulkan, or null")
+set_property(CACHE XBOXRECOMP_GRAPHICS_BACKEND PROPERTY STRINGS d3d11 vulkan null)
 
 # Common definitions for all targets
 add_compile_definitions(
@@ -36,6 +39,7 @@ add_compile_definitions(
 
 # Option to build examples
 option(XBOXRECOMP_BUILD_EXAMPLES "Build example programs" OFF)
+option(XBOXRECOMP_BUILD_GAME "Build a local game target from src/game when present" OFF)
 
 # ── Runtime Libraries ─────────────────────────────────────────
 
@@ -78,4 +82,8 @@ target_include_directories(xboxrecomp INTERFACE
 
 if(XBOXRECOMP_BUILD_EXAMPLES)
     add_subdirectory(examples)
+endif()
+
+if(XBOXRECOMP_BUILD_GAME AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/game/CMakeLists.txt")
+    add_subdirectory(src/game)
 endif()

@@ -10,6 +10,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Set
 
 from .loader import BinaryImage, KernelImport
+from tools.symbols.names import make_c_identifier
 
 
 class LabelType(Enum):
@@ -29,15 +30,19 @@ class Label:
     label_type: LabelType
     section: str = ""
     confidence: float = 1.0
+    symbol_name: str = ""
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "address": f"0x{self.address:08X}",
             "name": self.name,
             "type": self.label_type.value,
             "section": self.section,
             "confidence": self.confidence,
         }
+        if self.symbol_name:
+            result["symbol_name"] = self.symbol_name
+        return result
 
 
 class LabelManager:
@@ -165,6 +170,48 @@ def populate_entry_point(labels: LabelManager, image: BinaryImage) -> None:
         section=".text",
         confidence=1.0,
     ))
+
+
+def populate_seed_function_labels(labels: LabelManager,
+                                  image: BinaryImage,
+                                  seed_functions: List[dict]) -> int:
+    """Add labels from MAP/PDB/function seed files."""
+    count = 0
+    used_names = set(labels._names)
+    for seed in seed_functions:
+        if isinstance(seed, int):
+            continue
+        addr = seed.get("start")
+        if isinstance(addr, str):
+            addr = int(addr, 16)
+        if not isinstance(addr, int):
+            continue
+
+        has_real_symbol = bool(seed.get("symbol_name") or seed.get("raw_name"))
+        raw_name = seed.get("symbol_name") or seed.get("raw_name") or seed.get("name")
+        if not raw_name:
+            continue
+
+        name = seed.get("name")
+        if str(raw_name).startswith("sub_") and not has_real_symbol:
+            name = str(raw_name)
+        elif not name or name.startswith("sub_"):
+            name = make_c_identifier(raw_name, addr)
+        if name in used_names and labels._names.get(name) != addr:
+            name = make_c_identifier(raw_name, addr)
+        used_names.add(name)
+
+        section = image.get_section_at_va(addr)
+        labels.add(Label(
+            address=addr,
+            name=name,
+            label_type=LabelType.FUNCTION,
+            section=section.name if section else "",
+            confidence=0.98,
+            symbol_name=str(raw_name) if has_real_symbol else "",
+        ))
+        count += 1
+    return count
 
 
 def extract_strings(image: BinaryImage, min_length: int = 4,

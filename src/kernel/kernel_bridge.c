@@ -64,6 +64,12 @@ recomp_func_t recomp_lookup_manual(uint32_t xbox_va);
 
 #define KERNEL_VA_BASE  0xFE000000u
 #define KERNEL_VA_END   (KERNEL_VA_BASE + XBOX_KERNEL_THUNK_TABLE_SIZE * 4)
+#define BRIDGE_HANDLE_BASE 0x10000000u
+#define BRIDGE_HANDLE_MAX  1024
+
+static void bridge_write_handle(uint32_t handle_va, HANDLE h);
+static HANDLE bridge_lookup_handle_value(uint32_t xbox_handle);
+static BOOL bridge_close_handle_value(uint32_t xbox_handle);
 
 /* ── Kernel data exports ──────────────────────────────────
  *
@@ -288,17 +294,16 @@ static void bridge_PsCreateSystemThreadEx(void)
 static void bridge_NtClose(void)
 {
     uint32_t raw_handle = STACK_ARG(0);
-    HANDLE h = (HANDLE)(uintptr_t)raw_handle;
 
     if (g_kernel_call_count <= 200) {
         fprintf(stderr, "  [KERNEL] NtClose: handle=0x%08X\n", raw_handle);
         fflush(stderr);
     }
 
-    /* Close real handles but skip fake/synthetic ones */
-    if (raw_handle && raw_handle != 0xDEAD0001u &&
-        raw_handle != 0xBEEF0010u && h != INVALID_HANDLE_VALUE) {
-        CloseHandle(h);
+    if (!bridge_close_handle_value(raw_handle) && raw_handle >= BRIDGE_HANDLE_BASE &&
+        g_kernel_call_count <= 200) {
+        fprintf(stderr, "  [KERNEL] NtClose: unknown synthetic handle=0x%08X\n", raw_handle);
+        fflush(stderr);
     }
     g_eax = 0; /* STATUS_SUCCESS */
 }
@@ -578,13 +583,11 @@ static void bridge_NtCreateEvent(void)
         XBOX_TO_NATIVE(obj_attr_ptr),
         event_type, initial_state);
 
-    if (handle_ptr) {
-        BRIDGE_MEM32(handle_ptr) = (uint32_t)(uintptr_t)local_handle;
-    }
+    bridge_write_handle(handle_ptr, local_handle);
 
     fprintf(stderr, "  [BRIDGE] NtCreateEvent: handle_ptr=0x%08X type=%u init=%u → status=0x%08X handle=0x%08X\n",
             handle_ptr, event_type, initial_state, (uint32_t)status,
-            (uint32_t)(uintptr_t)local_handle);
+            handle_ptr ? BRIDGE_MEM32(handle_ptr) : 0);
 
     g_eax = (uint32_t)status;
 }
@@ -896,18 +899,81 @@ static void bridge_write_iostatus(uint32_t ios_va, NTSTATUS status, uint32_t inf
     }
 }
 
-/* Write a Win32 HANDLE into a 32-bit Xbox memory slot.
- * Win32 handles fit in 32 bits even on Win64. */
-static void bridge_write_handle(uint32_t handle_va, HANDLE h)
+typedef struct bridge_handle_entry {
+    uint32_t xbox_handle;
+    HANDLE host_handle;
+} bridge_handle_entry;
+
+static bridge_handle_entry g_bridge_handles[BRIDGE_HANDLE_MAX];
+static uint32_t g_next_bridge_handle = BRIDGE_HANDLE_BASE;
+
+static uint32_t bridge_store_handle(HANDLE h)
 {
-    if (handle_va)
-        BRIDGE_MEM32(handle_va) = (uint32_t)(uintptr_t)h;
+    if (!h || h == INVALID_HANDLE_VALUE) {
+        return 0;
+    }
+
+    for (size_t i = 0; i < BRIDGE_HANDLE_MAX; i++) {
+        if (!g_bridge_handles[i].host_handle) {
+            uint32_t xbox_handle = g_next_bridge_handle;
+            g_next_bridge_handle += 4;
+            if (g_next_bridge_handle < BRIDGE_HANDLE_BASE) {
+                g_next_bridge_handle = BRIDGE_HANDLE_BASE;
+            }
+            g_bridge_handles[i].xbox_handle = xbox_handle;
+            g_bridge_handles[i].host_handle = h;
+            return xbox_handle;
+        }
+    }
+
+    return 0;
 }
 
-/* Read a Win32 HANDLE from a 32-bit Xbox memory slot */
+static HANDLE bridge_lookup_handle_value(uint32_t xbox_handle)
+{
+    if (xbox_handle < BRIDGE_HANDLE_BASE) {
+        return NULL;
+    }
+
+    for (size_t i = 0; i < BRIDGE_HANDLE_MAX; i++) {
+        if (g_bridge_handles[i].xbox_handle == xbox_handle) {
+            return g_bridge_handles[i].host_handle;
+        }
+    }
+
+    return NULL;
+}
+
+static BOOL bridge_close_handle_value(uint32_t xbox_handle)
+{
+    if (xbox_handle < BRIDGE_HANDLE_BASE) {
+        return FALSE;
+    }
+
+    for (size_t i = 0; i < BRIDGE_HANDLE_MAX; i++) {
+        if (g_bridge_handles[i].xbox_handle == xbox_handle) {
+            HANDLE h = g_bridge_handles[i].host_handle;
+            g_bridge_handles[i].xbox_handle = 0;
+            g_bridge_handles[i].host_handle = NULL;
+            return h ? CloseHandle(h) : FALSE;
+        }
+    }
+
+    return FALSE;
+}
+
+/* Write a synthetic 32-bit Xbox handle into Xbox memory. */
+static void bridge_write_handle(uint32_t handle_va, HANDLE h)
+{
+    if (handle_va) {
+        BRIDGE_MEM32(handle_va) = bridge_store_handle(h);
+    }
+}
+
+/* Read a host HANDLE from a 32-bit Xbox memory slot. */
 static HANDLE bridge_read_handle(uint32_t va)
 {
-    return (HANDLE)(uintptr_t)BRIDGE_MEM32(va);
+    return bridge_lookup_handle_value(BRIDGE_MEM32(va));
 }
 
 /* Translate Xbox path and open file via Win32 CreateFileW */
@@ -999,7 +1065,8 @@ static NTSTATUS bridge_create_file_impl(
     bridge_write_iostatus(iostatus_va, STATUS_SUCCESS,
                           (disposition == 2) ? 2 /* FILE_CREATED */ : 1 /* FILE_OPENED */);
 
-    fprintf(stderr, "  [FILE] open: %s -> handle=0x%08X\n", xbox_path, (uint32_t)(uintptr_t)h);
+    fprintf(stderr, "  [FILE] open: %s -> handle=0x%08X\n",
+            xbox_path, handle_va ? BRIDGE_MEM32(handle_va) : 0);
     fflush(stderr);
     return STATUS_SUCCESS;
 }

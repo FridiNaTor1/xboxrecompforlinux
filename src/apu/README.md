@@ -6,7 +6,7 @@ Hardware emulation of the Xbox's MCPX APU (Audio Processing Unit), extracted fro
 - **GP (Global Processor)** — DSP for global effects (reverb, chorus). Currently **stubbed** — effects bypass.
 - **EP (Encode Processor)** — DSP for AC3/DTS encoding. Currently **stubbed** — passthrough.
 
-Audio output uses Windows `waveOut` at 48kHz stereo 16-bit. Linux currently builds with a no-op `waveOut` shim so APU state and mixing code compile, but host audio output is not implemented yet.
+Audio output uses Windows `waveOut` at 48kHz stereo 16-bit on Windows and SDL2 queued audio at 48kHz stereo 16-bit on Linux.
 
 ## Files
 
@@ -15,7 +15,7 @@ Audio output uses Windows `waveOut` at 48kHz stereo 16-bit. Linux currently buil
 | `apu.h` | 70 | **Public API** — init, shutdown, MMIO, mixer voices |
 | `apu_state.h` | 525 | APU state struct (VP, GP, EP, DSP core, 256 voices) |
 | `apu_regs.h` | 366 | MCPX APU register definitions and field masks |
-| `apu_core.c` | 762 | MMIO handlers, frame thread, waveOut output, test tone |
+| `apu_core.c` | 762 | MMIO handlers, frame thread, waveOut/SDL output, test tone |
 | `apu_vp.c` | 1,247 | Voice Processor — decode, resample, mix, envelopes, HRTF |
 | `apu_dsp.c` | 90 | GP/EP stubs (mixbin 0/1 passthrough) |
 | `apu_mmio_hook.c` | 253 | VEH x86-64 instruction decoder for 0xFE800000+ MMIO |
@@ -86,8 +86,8 @@ mcpx_apu_shutdown(apu);
                │ mixed samples
                ▼
    ┌──────────────────────────────┐
-   │    waveOut (48kHz stereo)    │
-   │  4 × 2048-sample buffers    │
+   │ waveOut/SDL2 (48kHz stereo) │
+   │    queued host buffers       │
    └──────────────────────────────┘
 ```
 

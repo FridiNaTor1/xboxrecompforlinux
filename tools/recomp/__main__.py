@@ -1,5 +1,5 @@
 """
-Burnout 3: Takedown - x86 → C Static Recompiler
+Xbox x86 → C Static Recompiler
 
 Usage:
     py -3 -m tools.recomp <xbe_path> [options]
@@ -22,6 +22,7 @@ import os
 import sys
 import time
 
+from . import config
 from .translator import BatchTranslator
 from .output import write_summary, print_stats, generate_header
 
@@ -45,6 +46,20 @@ def find_data_files():
     return paths
 
 
+def find_analysis_json(xbe_path):
+    """Find xbe_parser JSON next to the XBE or in game_files."""
+    stem = os.path.splitext(xbe_path)[0]
+    candidates = [
+        stem + "_analysis.json",
+        os.path.join(os.path.dirname(xbe_path), "default_analysis.json"),
+        os.path.join(os.path.dirname(xbe_path), "analysis.json"),
+    ]
+    for path in candidates:
+        if path and os.path.exists(path):
+            return path
+    return None
+
+
 def list_categories(translator):
     """Print category breakdown."""
     cats = {}
@@ -63,7 +78,7 @@ def list_categories(translator):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Burnout 3: x86 → C Static Recompiler")
+        description="Xbox x86 → C Static Recompiler")
     parser.add_argument("xbe_path", help="Path to default.xbe")
     parser.add_argument("-o", "--output-dir",
                         help="Output directory")
@@ -87,6 +102,9 @@ def main():
     parser.add_argument("--gen-dir",
                         help="Output dir for split generated files "
                              "(default: src/game/recomp/gen)")
+    parser.add_argument("--analysis-json",
+                        help="Path to xbe_parser --json output. Defaults to "
+                             "a JSON file next to the XBE when present.")
 
     args = parser.parse_args()
 
@@ -99,6 +117,14 @@ def main():
 
     print(f"Loading data files...", file=sys.stderr)
     t0 = time.time()
+
+    analysis_json = args.analysis_json or find_analysis_json(args.xbe_path)
+    if analysis_json:
+        config.load_analysis_json(analysis_json)
+        print(f"Loaded XBE section layout: {analysis_json}", file=sys.stderr)
+    else:
+        print("WARNING: no XBE analysis JSON found; using fallback section map",
+              file=sys.stderr)
 
     translator = BatchTranslator(
         xbe_path=args.xbe_path,

@@ -11,11 +11,11 @@
  Static Recompilation Toolkit for Original Xbox Games
 ```
 
-> Turn an Xbox game binary into a native executable. Windows has the current rendering backend; Linux now builds the runtime natively with portable shims and a null graphics backend.
+> Turn an Xbox game binary into a native executable. Windows has the current D3D11 rendering backend; Linux now builds natively with SDL2 input/audio and a Vulkan presentation backend.
 
 ### Recent Changes
 
-- **Native Linux Runtime Build** — The toolkit now configures and builds on Linux. Linux uses POSIX-backed replacements for the Win32 subset used by the runtime and defaults to a null graphics backend while a real Vulkan/DXVK renderer is developed.
+- **Native Linux Runtime Build** — The toolkit now configures and builds on Linux. Linux uses POSIX-backed replacements for the Win32 subset used by the runtime, SDL2 for controller/audio output, and a Vulkan presentation backend.
 - **Full Multi-Texture Fixed-Function Pipeline** — 4-stage texture blending with all D3D8 operations (MODULATE, ADD, SUBTRACT, BLEND*, DOTPRODUCT3, etc.), full D3DTA argument resolution (DIFFUSE, CURRENT, TEXTURE, TFACTOR, SPECULAR + COMPLEMENT/ALPHAREPLICATE), and 4 samplers bound per draw.
 - **Hardware T&L Lighting** — Up to 8 lights (directional, point, spot) with material properties, global ambient, specular highlights, and world-space normal transform. Full Blinn-Phong with attenuation and spotlight cones.
 - **Vertex Fog** — Linear/exp/exp2 fog computed in vertex shader, blended with fog color in pixel shader. Fog parameters sourced from D3D8 render states.
@@ -23,9 +23,9 @@
 - **NV2A Register Combiner Pixel Shaders** — Full 8-stage combiner + final combiner translated to HLSL at runtime with 128-entry shader cache.
 - **NV2A Programmable Vertex Shaders** — 128-bit microcode parser and HLSL generator covering all 14 MAC + 8 ILU operations, 192 constant registers, and relative addressing.
 - **Texture Unswizzling** — Xbox Z-order (Morton code) swizzled textures converted to linear D3D11 layout. Optimized masked-increment algorithm from xemu.
-- **NV2A PGRAPH→D3D11 Translator** — Push buffer method interception and D3D11 rendering (upstreamed from Burnout 3).
+- **NV2A PGRAPH→D3D11 Translator** — Push buffer method interception and D3D11 rendering.
 - **EEPROM / AV Pack / SMBus** — Games can query region, language, video standard, AV pack type, and hardware info.
-- **Three games in progress** — Burnout 3 (rendering), Wreckless (debugging), Blood Wake (analysis complete, scaffolded).
+- **Game bring-up workflow** — XBE parsing, symbol ingestion, disassembly, function identification, C lifting, and runtime integration.
 
 ---
 
@@ -97,11 +97,11 @@ Following the [RexGlueSDK](https://github.com/rexglue/rexglue-sdk) pattern (whic
 | Library | Source | What It Does |
 |---------|--------|-------------|
 | **xbox_kernel** | Custom | Xbox kernel → host OS (Win32 on Windows, POSIX-backed compatibility shim on Linux) |
-| **xbox_d3d8** | Custom | Windows: D3D8 → D3D11 graphics. Linux: null D3D8 ABI backend for bring-up until a real renderer lands |
+| **xbox_d3d8** | Custom | Windows: D3D8 → D3D11 graphics. Linux: Xbox D3D8 ABI backend with SDL/Vulkan window and swapchain presentation; `null` remains available for headless bring-up |
 | **xbox_dsound** | Custom | DirectSound → software mixer (IDirectSound8/IDirectSoundBuffer8) |
-| **xbox_apu** | xemu | MCPX APU audio (256-voice processor, ADPCM/PCM, envelopes, HRTF; waveOut on Windows, no-op output shim on Linux) |
-| **xbox_nv2a** | xemu+Custom | NV2A GPU register handlers/MMIO/push buffer parsing; PGRAPH routes to D3D11 on Windows or null backend on Linux |
-| **xbox_input** | Custom | Xbox gamepad → XInput on Windows; disconnected fallback on Linux pending SDL/hidraw input |
+| **xbox_apu** | xemu | MCPX APU audio (256-voice processor, ADPCM/PCM, envelopes, HRTF; waveOut on Windows, SDL2 queued audio on Linux) |
+| **xbox_nv2a** | xemu+Custom | NV2A GPU register handlers/MMIO/push buffer parsing; PGRAPH routes to D3D11 on Windows or the Linux backend boundary |
+| **xbox_input** | Custom | Xbox gamepad → XInput on Windows; SDL2 GameController on Linux, including DualSense through SDL's controller database |
 
 ### Building the Libraries
 
@@ -111,11 +111,26 @@ cmake -S . -B build
 cmake --build build --config Release
 ```
 
-On Linux, use the same commands. `XBOXRECOMP_GRAPHICS_BACKEND` defaults to `null`; Windows defaults to `d3d11`.
+On Linux, use the same commands. `XBOXRECOMP_GRAPHICS_BACKEND` defaults to `vulkan`; Windows defaults to `d3d11`.
 
 ```bash
 cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build/linux -j$(nproc)
+```
+
+If you create a local game target under `src/game/`, enable it explicitly:
+
+```bash
+cmake -S . -B build/linux-game -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build/linux-game -j$(nproc)
+./build/linux-game/src/game/<your_game_target>
+```
+
+Headless/non-rendering Linux fallback:
+
+```bash
+cmake -S . -B build/linux-null -DCMAKE_BUILD_TYPE=RelWithDebInfo -DXBOXRECOMP_GRAPHICS_BACKEND=null
+cmake --build build/linux-null -j$(nproc)
 ```
 
 This produces 6 static libraries in `build/src/*/`. Link your game project against `xboxrecomp` (umbrella target) or individual libraries.
@@ -158,11 +173,11 @@ The recompiler output (`tools/recomp`) generates these automatically. The xboxre
 │  │d3d8   │ │dsound │ │apu     │ │nv2a  │ │input││
 │  │D3D8→  │ │DSound→│ │MCPX APU│ │NV2A  │ │XPP→ ││
 │  │D3D11/ │ │mixer  │ │(xemu)  │ │(xemu)│ │XInput│
-│  │null   │ │       │ │        │ │      │ │/null ││
+│  │Vulkan │ │       │ │        │ │      │ │/SDL2 ││
 │  └───────┘ └───────┘ └────────┘ └──────┘ └─────┘│
 ├──────────────────────────────────────────────────┤
 │  Windows: D3D11, XInput, waveOut, Win32 API       │
-│  Linux: POSIX shims, null graphics/input output   │
+│  Linux: POSIX shims, SDL2, Vulkan presentation    │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -170,7 +185,7 @@ The recompiler output (`tools/recomp`) generates these automatically. The xboxre
 
 ### Prerequisites
 
-- **Windows 11/10** for the current rendered backend, or **Linux** for native runtime bring-up with null graphics
+- **Windows 11/10** for the D3D11 backend, or **Linux** with SDL2 and Vulkan development packages
 - **Python 3.10+** with `capstone` (`pip install capstone`)
 - **Visual Studio 2022** (MSVC compiler) on Windows, or GCC/Clang on Linux
 - **CMake 3.20+**
@@ -189,7 +204,7 @@ mkdir game_files
 # copy default.xbe and game data into game_files/
 
 # 3. Parse the XBE — learn what you're working with
-py -3 -m tools.xbe_parser game_files/default.xbe
+python3 tools/xbe_parser/xbe_parser.py game_files/default.xbe --json game_files/default_analysis.json
 #    Output: section map, kernel imports, entry point, XDK version
 
 # 4. Disassemble — find all functions
@@ -216,7 +231,17 @@ cmake --build build --config Release
 bin/your_game.exe
 ```
 
-On Linux the runtime builds, but game rendering is not implemented yet. Use the Linux build to start kernel, memory, file I/O, APU, and recomp pipeline bring-up before wiring a native renderer.
+On Linux the runtime now creates a Vulkan presentation window, accepts SDL2 controllers, and outputs mixed audio through SDL2. Actual NV2A/D3D draw lowering into Vulkan command buffers is still the next renderer milestone.
+
+Game-specific bring-up notes can live under `docs/game-bringup/`; generated game code and proprietary assets should stay out of the neutral runtime fork.
+
+See [docs/technical/candidate-games.md](docs/technical/candidate-games.md) for a detailed list of promising targets.
+
+## Projects Using This Toolkit
+
+- **[Burnout 3: Takedown](https://github.com/sp00nznet/burnout3)** — The reference implementation. 22,097 functions lifted, full main menu rendering at 60fps, 37 playable tracks with textures, 67 vehicle models, AWD audio playback.
+- **[Wreckless: The Yakuza Missions](https://github.com/sp00nznet/wreckless)** — Xbox launch title (2002). Custom engine, 3,407 functions, boots through CRT init into game main. Debugging early gameplay crash.
+- **[Blood Wake](https://github.com/sp00nznet/bloodwake)** — First-party Microsoft naval combat (2001). Stormfront Studios custom engine. 4,608 functions, 367K lines of C generated (99.1% success). Project scaffolded, working toward first build.
 
 ### What To Expect
 
@@ -229,7 +254,7 @@ The first time you run a recompiled game, **it will crash**. That's normal. The 
 5. **Debug** — use the ICALL trace ring buffer, memory access logging, and your debugger
 6. **Iterate** — each crash teaches you something about the game. Fix it and move on.
 
-With Burnout 3 (the first game recompiled with this toolkit), the process from "empty repo" to "game boots and renders textured 3D tracks" took about two weeks of iterative development.
+Bring-up time varies widely by game, engine, symbols, and how much of the runtime surface it exercises.
 
 ## Repository Structure
 
@@ -385,7 +410,7 @@ When games use programmable vertex shaders (water displacement, skeletal animati
 
 ## Games That Work Well As Targets
 
-Based on our experience with Burnout 3, the best candidates for Xbox static recomp share these traits:
+The best candidates for Xbox static recomp generally share these traits:
 
 | Factor | Easier | Harder |
 |--------|--------|--------|
@@ -396,13 +421,7 @@ Based on our experience with Burnout 3, the best candidates for Xbox static reco
 | **Online** | Offline only | Xbox Live dependent |
 | **PC port** | No PC version (worth the effort!) | Good PC port exists |
 
-See [docs/technical/candidate-games.md](docs/technical/candidate-games.md) for a detailed list of promising targets.
-
-## Projects Using This Toolkit
-
-- **[Burnout 3: Takedown](https://github.com/sp00nznet/burnout3)** — The reference implementation. 22,097 functions lifted, full main menu rendering at 60fps, 37 playable tracks with textures, 67 vehicle models, AWD audio playback.
-- **[Wreckless: The Yakuza Missions](https://github.com/sp00nznet/wreckless)** — Xbox launch title (2002). Custom engine, 3,407 functions, boots through CRT init into game main. Debugging early gameplay crash.
-- **[Blood Wake](https://github.com/sp00nznet/bloodwake)** — First-party Microsoft naval combat (2001). Stormfront Studios custom engine. 4,608 functions, 367K lines of C generated (99.1% success). Project scaffolded, working toward first build.
+Keep game-specific generated code, proprietary assets, and per-title runtime patches in separate projects or private branches.
 
 ## How You Can Help
 
@@ -443,7 +462,7 @@ A: Emulators interpret or JIT-compile code at runtime. Static recompilation tran
 A: No. Xbox 360 uses PowerPC (big-endian, different ISA). See [XenonRecomp](https://github.com/hedge-dev/XenonRecomp) for Xbox 360 static recompilation. This toolkit is specifically for the original Xbox's x86 code.
 
 **Q: How long does it take to get a game running?**
-A: It depends on the game's complexity. Burnout 3 went from zero to "boots and renders 3D tracks" in about two weeks. Simple games might be faster; complex ones with custom engines could take longer. The toolchain handles the mechanical translation — the real work is building the runtime shims and debugging indirect calls.
+A: It depends on the game's complexity. Symbol-rich debug builds and conventional engine/runtime usage can move quickly; complex games with custom engines, threading, networking, and direct hardware access take longer. The toolchain handles the mechanical translation — the real work is building the runtime shims and debugging indirect calls.
 
 **Q: Why C output instead of direct x86-64 binary translation?**
 A: C is portable, debuggable, and the compiler optimizes it for you. You can read the output, set breakpoints in it, and modify individual functions. Direct binary translation would be faster to run but impossible to debug or modify.

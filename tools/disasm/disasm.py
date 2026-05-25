@@ -15,7 +15,7 @@ from .functions import FunctionDetector
 from .xrefs import build_xrefs, XRefTracker
 from .labels import (
     LabelManager, populate_kernel_labels, populate_entry_point,
-    extract_strings, populate_string_labels,
+    extract_strings, populate_string_labels, populate_seed_function_labels,
 )
 from .output import OutputWriter, print_stats
 from .cache import AnalysisCache
@@ -106,8 +106,12 @@ class Disassembler:
         # Extract strings from .rdata
         self.strings = extract_strings(self.image)
         str_count = populate_string_labels(self.labels, self.strings)
+        seed_label_count = populate_seed_function_labels(
+            self.labels, self.image, self.seed_functions)
         if self.verbose:
             print(f"  String labels: {str_count}")
+            if seed_label_count:
+                print(f"  Seed symbol labels: {seed_label_count}")
             print(f"  Total labels: {self.labels.count()}")
 
         # Phase 3: Disassembly (linear sweep)
@@ -154,10 +158,20 @@ class Disassembler:
 
         # Add seed functions from vtable scanner or other sources
         if self.seed_functions:
-            for addr in self.seed_functions:
+            seed_addrs = []
+            for seed in self.seed_functions:
+                if isinstance(seed, dict):
+                    addr = seed.get("start")
+                    if isinstance(addr, str):
+                        addr = int(addr, 16)
+                else:
+                    addr = seed
+                if not isinstance(addr, int):
+                    continue
+                seed_addrs.append(addr)
                 self.func_detector._add_candidate(addr, 0.95, "seed_vtable_thunk")
             if self.verbose:
-                print(f"  Seeded {len(self.seed_functions)} function addresses")
+                print(f"  Seeded {len(seed_addrs)} function addresses")
 
         num_funcs = self.func_detector.detect_all(sections)
         if self.verbose:

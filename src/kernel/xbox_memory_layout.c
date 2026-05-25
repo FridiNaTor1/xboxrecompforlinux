@@ -23,6 +23,8 @@
 #define XBE_HEADER_SIZE_OFFSET  0x0108
 #define XBE_SECTION_COUNT_OFFSET 0x011C
 #define XBE_SECTION_HEADERS_OFFSET 0x0120
+#define XBE_THUNK_RETAIL_XOR  0x5B6D40B6u
+#define XBE_THUNK_DEBUG_XOR   0xEFB1F152u
 
 /* XBE section header layout (56 bytes each) */
 #define SECTHDR_FLAGS       0x00
@@ -264,29 +266,43 @@ BOOL xbox_MemoryLayoutInit(const void *xbe_data, size_t xbe_size)
 
     /*
      * Parse the kernel thunk table address from the XBE header.
-     * The XBE stores KernelImageThunkAddress at offset 0x0158,
-     * XOR-encrypted with 0x5B6D40B6 for retail builds.
-     * We decrypt it and tell the kernel bridge where to find thunks.
+     * KernelImageThunkAddress is XOR-encrypted with different keys for
+     * retail and debug builds. Try both and use the first plausible table.
      */
     if (xbe_size >= 0x015C) {
         uint32_t thunk_raw = *(const uint32_t *)(xbe + 0x0158);
-        uint32_t thunk_va = thunk_raw ^ 0x5B6D40B6;  /* retail XOR key */
+        const uint32_t candidates[] = {
+            thunk_raw ^ XBE_THUNK_RETAIL_XOR,
+            thunk_raw ^ XBE_THUNK_DEBUG_XOR,
+        };
+        uint32_t thunk_va = 0;
+        uint32_t thunk_count = 0;
 
-        /* Validate: thunk VA should be within our mapped region */
-        if (thunk_va >= XBOX_BASE_ADDRESS && thunk_va < XBOX_TOTAL_RAM) {
-            /* Count thunk entries by scanning until we hit 0 */
-            uint32_t thunk_count = 0;
-            for (uint32_t t = 0; t < 366; t++) {
-                uint32_t entry = *(volatile uint32_t *)((uintptr_t)(thunk_va + t * 4) + g_memory_offset);
-                if (entry == 0) break;
-                thunk_count++;
+        for (size_t c = 0; c < sizeof(candidates) / sizeof(candidates[0]); c++) {
+            uint32_t candidate = candidates[c];
+            uint32_t count = 0;
+            if (candidate < XBOX_BASE_ADDRESS || candidate >= XBOX_TOTAL_RAM) {
+                continue;
             }
+            for (uint32_t t = 0; t < 366; t++) {
+                uint32_t entry = *(volatile uint32_t *)((uintptr_t)(candidate + t * 4) + g_memory_offset);
+                if (entry == 0) break;
+                count++;
+            }
+            if (count > 0) {
+                thunk_va = candidate;
+                thunk_count = count;
+                break;
+            }
+        }
+
+        if (thunk_va) {
             xbox_kernel_set_thunk_address(thunk_va, thunk_count);
             fprintf(stderr, "  Kernel thunks: %u entries at Xbox VA 0x%08X\n",
                     thunk_count, thunk_va);
         } else {
-            fprintf(stderr, "  WARNING: kernel thunk VA 0x%08X out of range (raw=0x%08X)\n",
-                    thunk_va, thunk_raw);
+            fprintf(stderr, "  WARNING: kernel thunk VA out of range (raw=0x%08X)\n",
+                    thunk_raw);
         }
     }
 

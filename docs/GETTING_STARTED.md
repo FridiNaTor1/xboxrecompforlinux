@@ -1,12 +1,12 @@
 # Getting Started with Xbox Static Recompilation
 
-This guide walks you through recompiling your first Xbox game, from extracting the XBE to getting the game running on Windows.
+This guide walks you through recompiling your first Xbox game, from extracting the XBE to getting the game running. Windows is still the rendered target; Linux can now build the runtime natively for bring-up with null graphics.
 
 ## What You Need
 
-- **Windows 11** (or 10 with recent updates)
+- **Windows 11/10** for the D3D11 renderer, or **Linux** for native runtime bring-up with null graphics
 - **Python 3.10+** with `capstone` installed (`pip install capstone`)
-- **Visual Studio 2022** (MSVC compiler) with C/C++ desktop workload
+- **Visual Studio 2022** with C/C++ desktop workload on Windows, or GCC/Clang on Linux
 - **CMake 3.20+**
 - An original Xbox game disc image (ISO/XISO) — you must own the game
 - A tool to extract ISO files ([extract-xiso](https://github.com/XboxDev/extract-xiso) or [xdvdfs](https://github.com/antangelo/xdvdfs))
@@ -33,6 +33,15 @@ cmake -S . -B build
 cmake --build build --config Release
 cd ../my_xbox_game
 ```
+
+Linux runtime-only build:
+
+```bash
+cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build/linux -j$(nproc)
+```
+
+Linux currently defaults to `XBOXRECOMP_GRAPHICS_BACKEND=null`, which preserves the D3D8 ABI but does not render frames.
 
 ## Step 1: Extract the XBE
 

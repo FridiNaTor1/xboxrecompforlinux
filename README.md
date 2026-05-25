@@ -11,10 +11,11 @@
  Static Recompilation Toolkit for Original Xbox Games
 ```
 
-> Turn any Xbox game binary into a native Windows executable. No emulation. No interpreter. Just raw, recompiled C.
+> Turn an Xbox game binary into a native executable. Windows has the current rendering backend; Linux now builds the runtime natively with portable shims and a null graphics backend.
 
 ### Recent Changes
 
+- **Native Linux Runtime Build** — The toolkit now configures and builds on Linux. Linux uses POSIX-backed replacements for the Win32 subset used by the runtime and defaults to a null graphics backend while a real Vulkan/DXVK renderer is developed.
 - **Full Multi-Texture Fixed-Function Pipeline** — 4-stage texture blending with all D3D8 operations (MODULATE, ADD, SUBTRACT, BLEND*, DOTPRODUCT3, etc.), full D3DTA argument resolution (DIFFUSE, CURRENT, TEXTURE, TFACTOR, SPECULAR + COMPLEMENT/ALPHAREPLICATE), and 4 samplers bound per draw.
 - **Hardware T&L Lighting** — Up to 8 lights (directional, point, spot) with material properties, global ambient, specular highlights, and world-space normal transform. Full Blinn-Phong with attenuation and spotlight cones.
 - **Vertex Fog** — Linear/exp/exp2 fog computed in vertex shader, blended with fog color in pixel shader. Fog parameters sourced from D3D8 render states.
@@ -30,9 +31,9 @@
 
 ## What Is This?
 
-This is a complete toolkit for **statically recompiling original Xbox (2001-2005) games** from their retail XBE executables into native Windows programs.
+This is a toolkit for **statically recompiling original Xbox (2001-2005) games** from their retail XBE executables into native programs.
 
-Static recompilation takes the raw x86 machine code from an Xbox binary and translates every function — every `mov`, every `jmp`, every `call` — into equivalent C source code. That C code compiles with MSVC into a native x86-64 `.exe` that runs on modern Windows. The game's original logic executes directly on your CPU, not through an interpreter or JIT compiler.
+Static recompilation takes the raw x86 machine code from an Xbox binary and translates every function — every `mov`, every `jmp`, every `call` — into equivalent C source code. That C code compiles into a native host binary. The game's original logic executes directly on your CPU, not through an interpreter or JIT compiler.
 
 **This is the first known static recompilation project targeting the original Xbox.**
 
@@ -85,7 +86,7 @@ Emulators are great. Cxbx-Reloaded and xemu do incredible work. But static recom
               |
               v
     +-------------------+
-    |  7. Compile & Run  |    MSVC builds native .exe — game runs!
+    |  7. Compile & Run  |    Host compiler builds a native binary
     +-------------------+
 ```
 
@@ -95,12 +96,12 @@ Following the [RexGlueSDK](https://github.com/rexglue/rexglue-sdk) pattern (whic
 
 | Library | Source | What It Does |
 |---------|--------|-------------|
-| **xbox_kernel** | Custom | Xbox kernel → Win32 (147+ imports: memory, file I/O, threading, sync, crypto, HAL, EEPROM, SMBus) |
-| **xbox_d3d8** | Custom | D3D8 → D3D11 graphics: **4-stage multi-texture** FFP pipeline, **NV2A register combiner** pixel shaders, **programmable vertex shaders** (NV2A microcode → HLSL), **hardware T&L lighting** (8 lights), **vertex fog**, DrawPrimitiveUP ring buffer, texture unswizzling, 20+ format conversions |
+| **xbox_kernel** | Custom | Xbox kernel → host OS (Win32 on Windows, POSIX-backed compatibility shim on Linux) |
+| **xbox_d3d8** | Custom | Windows: D3D8 → D3D11 graphics. Linux: null D3D8 ABI backend for bring-up until a real renderer lands |
 | **xbox_dsound** | Custom | DirectSound → software mixer (IDirectSound8/IDirectSoundBuffer8) |
-| **xbox_apu** | xemu | MCPX APU audio (256-voice processor, ADPCM/PCM, envelopes, HRTF, waveOut output) |
-| **xbox_nv2a** | xemu+Custom | NV2A GPU (register handlers, MMIO interception, push buffer parsing, PGRAPH → D3D11 translation) |
-| **xbox_input** | Custom | Xbox gamepad → XInput |
+| **xbox_apu** | xemu | MCPX APU audio (256-voice processor, ADPCM/PCM, envelopes, HRTF; waveOut on Windows, no-op output shim on Linux) |
+| **xbox_nv2a** | xemu+Custom | NV2A GPU register handlers/MMIO/push buffer parsing; PGRAPH routes to D3D11 on Windows or null backend on Linux |
+| **xbox_input** | Custom | Xbox gamepad → XInput on Windows; disconnected fallback on Linux pending SDL/hidraw input |
 
 ### Building the Libraries
 
@@ -110,7 +111,16 @@ cmake -S . -B build
 cmake --build build --config Release
 ```
 
-This produces 6 static libraries in `build/src/*/Release/`. Link your game project against `xboxrecomp` (umbrella target) or individual libraries.
+On Linux, use the same commands. `XBOXRECOMP_GRAPHICS_BACKEND` defaults to `null`; Windows defaults to `d3d11`.
+
+```bash
+cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build/linux -j$(nproc)
+```
+
+This produces 6 static libraries in `build/src/*/`. Link your game project against `xboxrecomp` (umbrella target) or individual libraries.
+
+`d8vk` is not vendored as a submodule at this stage. It is a D3D8-to-Vulkan DLL for Wine/Windows-style D3D8 callers, while this runtime implements the Xbox D3D8 ABI directly in-process. The Linux renderer should sit behind `xbox_d3d8`/`xbox_nv2a` as a native backend, not as a dropped-in `d3d8.dll`.
 
 ### Integration Pattern
 
@@ -147,10 +157,12 @@ The recompiler output (`tools/recomp`) generates these automatically. The xboxre
 │  │xbox_  │ │xbox_  │ │xbox_   │ │xbox_ │ │xbox_││
 │  │d3d8   │ │dsound │ │apu     │ │nv2a  │ │input││
 │  │D3D8→  │ │DSound→│ │MCPX APU│ │NV2A  │ │XPP→ ││
-│  │D3D11  │ │mixer  │ │(xemu)  │ │(xemu)│ │XInput│
+│  │D3D11/ │ │mixer  │ │(xemu)  │ │(xemu)│ │XInput│
+│  │null   │ │       │ │        │ │      │ │/null ││
 │  └───────┘ └───────┘ └────────┘ └──────┘ └─────┘│
 ├──────────────────────────────────────────────────┤
-│  Windows 11: D3D11, XInput, waveOut, Win32 API   │
+│  Windows: D3D11, XInput, waveOut, Win32 API       │
+│  Linux: POSIX shims, null graphics/input output   │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -158,9 +170,9 @@ The recompiler output (`tools/recomp`) generates these automatically. The xboxre
 
 ### Prerequisites
 
-- **Windows 11** (or 10 with recent updates)
+- **Windows 11/10** for the current rendered backend, or **Linux** for native runtime bring-up with null graphics
 - **Python 3.10+** with `capstone` (`pip install capstone`)
-- **Visual Studio 2022** (MSVC compiler)
+- **Visual Studio 2022** (MSVC compiler) on Windows, or GCC/Clang on Linux
 - **CMake 3.20+**
 - An original Xbox game disc image (you must own the game)
 
@@ -204,6 +216,8 @@ cmake --build build --config Release
 bin/your_game.exe
 ```
 
+On Linux the runtime builds, but game rendering is not implemented yet. Use the Linux build to start kernel, memory, file I/O, APU, and recomp pipeline bring-up before wiring a native renderer.
+
 ### What To Expect
 
 The first time you run a recompiled game, **it will crash**. That's normal. The process is iterative:
@@ -229,13 +243,14 @@ xboxrecomp/
 │   ├── func_id/                 # Library function identifier
 │   └── recomp/                  # x86 -> C static recompiler
 ├── src/                         # Runtime libraries (C, link-time)
-│   ├── kernel/                  # xbox_kernel - Xbox kernel → Win32
-│   ├── d3d/                     # xbox_d3d8   - D3D8 → D3D11 graphics
+│   ├── kernel/                  # xbox_kernel - Xbox kernel → host OS
+│   ├── d3d/                     # xbox_d3d8   - D3D8 → D3D11/null graphics
 │   ├── audio/                   # xbox_dsound - DirectSound compat
 │   ├── apu/                     # xbox_apu    - MCPX APU emulation (xemu)
 │   ├── nv2a/                    # xbox_nv2a   - NV2A GPU emulation (xemu)
 │   └── input/                   # xbox_input  - Gamepad → XInput
-├── include/xbox/                # Public umbrella header (xboxrecomp.h)
+├── src/platform/                 # Linux compatibility shims
+├── include/                     # Public headers
 ├── templates/                   # Starter templates for new projects
 │   └── runtime/                 # Runtime shim templates
 │       ├── recomp_types.h       # Register model + ICALL macros

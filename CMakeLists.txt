@@ -16,6 +16,18 @@ project(xboxrecomp VERSION 0.1.0 LANGUAGES C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+if(UNIX AND NOT APPLE)
+    set(XBOXRECOMP_DEFAULT_GRAPHICS_BACKEND "null")
+    set(XBOXRECOMP_PLATFORM_COMPAT_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/win32_compat")
+else()
+    set(XBOXRECOMP_DEFAULT_GRAPHICS_BACKEND "d3d11")
+    set(XBOXRECOMP_PLATFORM_COMPAT_INCLUDE "")
+endif()
+
+set(XBOXRECOMP_GRAPHICS_BACKEND "${XBOXRECOMP_DEFAULT_GRAPHICS_BACKEND}" CACHE STRING
+    "Graphics backend to build: d3d11 or null")
+set_property(CACHE XBOXRECOMP_GRAPHICS_BACKEND PROPERTY STRINGS d3d11 null)
+
 # Common definitions for all targets
 add_compile_definitions(
     WIN32_LEAN_AND_MEAN
@@ -56,6 +68,10 @@ target_link_libraries(xboxrecomp INTERFACE
     xbox_input
     xbox_apu
     xbox_nv2a
+)
+
+target_include_directories(xboxrecomp INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 # ── Examples ──────────────────────────────────────────────────

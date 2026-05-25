@@ -24,9 +24,17 @@ set(KERNEL_SOURCES
 
 add_library(xbox_kernel STATIC ${KERNEL_SOURCES})
 
-target_include_directories(xbox_kernel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(xbox_kernel PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/include
+    ${XBOXRECOMP_PLATFORM_COMPAT_INCLUDE}
+)
 
-target_link_libraries(xbox_kernel PUBLIC kernel32 bcrypt)
+if(WIN32)
+    target_link_libraries(xbox_kernel PUBLIC kernel32 bcrypt)
+else()
+    target_link_libraries(xbox_kernel PUBLIC pthread)
+endif()
 
 if(MSVC)
     target_compile_options(xbox_kernel PRIVATE /W4 /WX- /O2 /GS- /Gy)

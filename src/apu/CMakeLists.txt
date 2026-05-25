@@ -12,7 +12,11 @@ add_library(xbox_apu STATIC
     apu_mmio_hook.c
 )
 
-target_include_directories(xbox_apu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(xbox_apu PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/include
+    ${XBOXRECOMP_PLATFORM_COMPAT_INCLUDE}
+)
 
 # qemu_shim.h lives in nv2a/ - shared QEMU type abstraction
 target_include_directories(xbox_apu PRIVATE
@@ -32,4 +36,8 @@ if(MSVC)
     )
 endif()
 
-target_link_libraries(xbox_apu PRIVATE kernel32 winmm)
+if(WIN32)
+    target_link_libraries(xbox_apu PRIVATE kernel32 winmm)
+else()
+    target_link_libraries(xbox_apu PRIVATE pthread m)
+endif()

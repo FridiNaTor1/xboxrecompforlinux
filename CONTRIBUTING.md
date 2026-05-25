@@ -6,8 +6,8 @@ Thanks for your interest in contributing to the Xbox static recompilation toolki
 
 You need:
 
-- **Windows 10/11** (the runtime targets Win32 APIs directly)
-- **Visual Studio 2022** with the C/C++ workload (MSVC compiler required)
+- **Windows 10/11** with Visual Studio 2022 for the D3D11 renderer, or Linux with GCC/Clang for native runtime bring-up
+- **Visual Studio 2022** with the C/C++ workload on Windows
 - **CMake 3.20+**
 - **Python 3.10+** with `capstone` installed (`pip install capstone`)
 - **Git**
@@ -20,6 +20,15 @@ cd xboxrecomp
 cmake -S . -B build
 cmake --build build --config Release
 ```
+
+Linux build:
+
+```bash
+cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build/linux -j$(nproc)
+```
+
+Linux uses compatibility shims and the null graphics backend by default. Renderer work should add a native backend behind the existing D3D8/NV2A interfaces.
 
 This produces six static libraries in `build/src/*/Release/`. See the [README](README.md) for the full architecture diagram and library descriptions.
 
@@ -91,8 +100,8 @@ Every Xbox game has its own asset formats. If you reverse-engineer a texture for
 
 ## Code Style
 
-- **C11** standard, targeting MSVC (Visual Studio 2022).
-- **No external dependencies** for the runtime libraries. Everything needed is either in the Windows SDK or self-contained in this repo.
+- **C11** standard, targeting MSVC on Windows and GCC/Clang on Linux.
+- **No external dependencies** for the runtime libraries unless a platform backend explicitly introduces one.
 - Use `stdint.h` types (`uint32_t`, `int16_t`, etc.) rather than platform-specific types.
 - 4-space indentation, no tabs.
 - Function names: `xbox_ModuleName_FunctionName` for public APIs, `snake_case` for internal helpers.

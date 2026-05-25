@@ -5,7 +5,11 @@ add_library(xbox_dsound STATIC
     dsound_device.c
 )
 
-target_include_directories(xbox_dsound PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(xbox_dsound PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/include
+    ${XBOXRECOMP_PLATFORM_COMPAT_INCLUDE}
+)
 
 # Links to APU emulation for mixer voices
 target_link_libraries(xbox_dsound PUBLIC xbox_apu)

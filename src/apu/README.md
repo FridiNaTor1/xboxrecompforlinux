@@ -6,7 +6,7 @@ Hardware emulation of the Xbox's MCPX APU (Audio Processing Unit), extracted fro
 - **GP (Global Processor)** — DSP for global effects (reverb, chorus). Currently **stubbed** — effects bypass.
 - **EP (Encode Processor)** — DSP for AC3/DTS encoding. Currently **stubbed** — passthrough.
 
-Audio output uses Windows `waveOut` at 48kHz stereo 16-bit.
+Audio output uses Windows `waveOut` at 48kHz stereo 16-bit. Linux currently builds with a no-op `waveOut` shim so APU state and mixing code compile, but host audio output is not implemented yet.
 
 ## Files
 

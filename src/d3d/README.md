@@ -1,6 +1,6 @@
-# xbox_d3d8 — D3D8 to D3D11 Graphics Compatibility
+# xbox_d3d8 — Xbox D3D8 Compatibility
 
-Implements the Xbox's modified Direct3D 8 interface backed by a Direct3D 11 device. The Xbox D3D8 API is similar to PC D3D8 but has Xbox-specific extensions (push buffers, swizzled textures, pixel shader combiners, etc.).
+Implements the Xbox's modified Direct3D 8 interface. On Windows this is backed by a Direct3D 11 device. On Linux the build uses `d3d8_null.c`, a non-rendering ABI-compatible backend for runtime bring-up.
 
 ## Files
 
@@ -12,13 +12,14 @@ Implements the Xbox's modified Direct3D 8 interface backed by a Direct3D 11 devi
 | `d3d8_resources.c` | 541 | Vertex/index buffers, textures, format conversion |
 | `d3d8_shaders.c` | 529 | Shader compilation, input layout, constant buffers |
 | `d3d8_states.c` | 350 | Render state translation (D3D8 → D3D11), sampler states |
+| `d3d8_null.c` | 361 | Linux/default null backend; creates objects, accepts calls, renders nothing |
 
 ## Quick Start
 
 ```c
 #include "d3d8_xbox.h"
 
-// Create D3D8 interface (creates D3D11 device internally)
+// Create D3D8 interface (D3D11 on Windows, null backend on Linux)
 IDirect3D8 *d3d = xbox_Direct3DCreate8(0);
 
 // Create device (creates window, swap chain, render targets)
@@ -33,9 +34,13 @@ dev->lpVtbl->SetTexture(dev, 0, texture);
 dev->lpVtbl->DrawPrimitive(dev, D3DPT_TRIANGLELIST, 0, tri_count);
 dev->lpVtbl->EndScene(dev);
 
-// Present (also pumps Win32 message loop)
+// Present
 d3d8_PresentFrame();
 ```
+
+## Linux Status
+
+The Linux backend is deliberately a placeholder. It lets game code create D3D8 devices/resources and proceed through non-rendering initialization without linking DirectX. A real Linux renderer should replace `d3d8_null.c` behind the same public ABI, likely using Vulkan and sharing state with the NV2A PGRAPH path.
 
 ## How It Works
 

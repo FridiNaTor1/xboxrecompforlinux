@@ -2,6 +2,8 @@
 
 Maps the Xbox controller API to Windows XInput. The original Xbox used `XInputGetState` with a slightly different structure layout than the XInput API on Windows. This layer translates between them.
 
+On Linux this currently builds against a small XInput compatibility shim that reports controllers as disconnected. Replace that shim with SDL, evdev, or hidraw input when gameplay bring-up needs real controls.
+
 ## Files
 
 | File | LOC | Purpose |

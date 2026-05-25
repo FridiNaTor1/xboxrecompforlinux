@@ -5,15 +5,26 @@
 # MMIO interception via VEH (Vectored Exception Handling)
 # Push buffer parsing and command dispatch
 
-add_library(xbox_nv2a STATIC
+set(NV2A_SOURCES
     nv2a_core.c
-    nv2a_pgraph_d3d11.c
     nv2a_pb_replay.c
     nv2a_mmio_hook.c
     nv2a_pb_test.c
 )
 
-target_include_directories(xbox_nv2a PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+if(XBOXRECOMP_GRAPHICS_BACKEND STREQUAL "d3d11")
+    list(APPEND NV2A_SOURCES nv2a_pgraph_d3d11.c)
+else()
+    list(APPEND NV2A_SOURCES nv2a_pgraph_null.c)
+endif()
+
+add_library(xbox_nv2a STATIC ${NV2A_SOURCES})
+
+target_include_directories(xbox_nv2a PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/include
+    ${XBOXRECOMP_PLATFORM_COMPAT_INCLUDE}
+)
 
 if(MSVC)
     target_compile_options(xbox_nv2a PRIVATE
@@ -29,4 +40,8 @@ else()
     target_compile_options(xbox_nv2a PRIVATE -Wall -Wextra -Wno-unused-parameter -O2)
 endif()
 
-target_link_libraries(xbox_nv2a PRIVATE kernel32)
+if(WIN32)
+    target_link_libraries(xbox_nv2a PRIVATE kernel32)
+else()
+    target_link_libraries(xbox_nv2a PRIVATE pthread)
+endif()

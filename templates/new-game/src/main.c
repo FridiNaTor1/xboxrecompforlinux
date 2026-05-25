@@ -1,7 +1,7 @@
 /**
  * YOUR_GAME_NAME - Recompiled Game Entry Point
  *
- * This is the Windows executable that hosts the recompiled game code.
+ * This is the host executable that runs the recompiled game code.
  * It performs the following initialization sequence:
  *
  * 1. Load the original XBE file from disk
@@ -10,7 +10,7 @@
  * 4. Initialize the kernel bridge (thunk table in Xbox memory)
  * 5. Set up game file paths for I/O redirection
  * 6. Initialize the stack pointer
- * 7. Install VEH crash handler for diagnostics
+ * 7. Install crash handler for diagnostics (VEH on Windows)
  * 8. Call the game's original entry point (recompiled)
  *
  * Customize this file for your game:

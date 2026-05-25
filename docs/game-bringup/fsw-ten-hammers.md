@@ -1,15 +1,15 @@
-# Full Spectrum Warrior: Ten Hammers Bring-Up
+# Full Spectrum Warrior: Ten Hammers Dec 5, 2005 Bring-Up
 
-Local game files are in `game_files/`.
+Local game files were in `game_files/`.
 
 ## Input Files
 
 | File | Notes |
 |------|-------|
-| `default.xbe` | Debug XBE, 6.6 MiB |
-| `fsw.exe` | Matching debug path executable name from XBE metadata |
-| `fsw.map` | Linker map, 4.9 MiB |
-| `fsw.pdb` | PDB symbols, 21 MiB |
+| `default.xbe`| Debug XBE, 6.6 MiB |
+| `fsw.exe`    | Matching debug path executable name from XBE metadata |
+| `fsw.map`    | Linker map, 4.9 MiB |
+| `fsw.pdb`    | PDB symbols, 21 MiB |
 
 ## XBE Metadata
 

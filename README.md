@@ -152,32 +152,32 @@ The recompiler output (`tools/recomp`) generates these automatically. The xboxre
 ### Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│              Your Game (.exe)                     │
-│  ┌──────────┐ ┌──────────┐ ┌──────────────────┐ │
-│  │ recomp/  │ │ manual   │ │ game-specific    │ │
-│  │ gen/*.c  │ │ overrides│ │ loaders/formats  │ │
-│  └────┬─────┘ └────┬─────┘ └────────┬─────────┘ │
-│       │             │                │            │
-│       └──────┬──────┘────────────────┘            │
-│              │ recomp_lookup() / ICALL dispatch    │
-├──────────────┼────────────────────────────────────┤
-│              │   xboxrecomp libraries             │
-│  ┌───────────┴──────────┐                         │
-│  │    xbox_kernel        │  Memory layout, file    │
-│  │    (kernel_bridge.c)  │  I/O, threading, sync   │
-│  └───────────┬──────────┘                         │
-│              │                                     │
-│  ┌───────┐ ┌┴──────┐ ┌────────┐ ┌──────┐ ┌─────┐│
-│  │xbox_  │ │xbox_  │ │xbox_   │ │xbox_ │ │xbox_││
-│  │d3d8   │ │dsound │ │apu     │ │nv2a  │ │input││
-│  │D3D8→  │ │DSound→│ │MCPX APU│ │NV2A  │ │XPP→ ││
-│  │D3D11/ │ │mixer  │ │(xemu)  │ │(xemu)│ │XInput│
+┌──────────────────────────────────────────────────┐
+│              Your Game (.exe)                    │
+│  ┌──────────┐ ┌──────────┐ ┌──────────────────┐  │
+│  │ recomp/  │ │ manual   │ │ game-specific    │  │
+│  │ gen/*.c  │ │ overrides│ │ loaders/formats  │  │
+│  └────┬─────┘ └────┬─────┘ └────────┬─────────┘  │
+│       │            │                │            │
+│       └──────┬─────┘────────────────┘            │
+│              │ recomp_lookup() / ICALL dispatch  │
+├──────────────┼───────────────────────────────────┤
+│              │   xboxrecomp libraries            │
+│  ┌───────────┴──────────┐                        │
+│  │    xbox_kernel       │  Memory layout, file   │
+│  │    (kernel_bridge.c) │  I/O, threading, sync  │
+│  └───────────┬──────────┘                        │
+│              │                                   │
+│  ┌───────┐ ┌─┴─────┐ ┌────────┐ ┌──────┐ ┌──────┐│
+│  │xbox_  │ │xbox_  │ │xbox_   │ │xbox_ │ │xbox_ ││
+│  │d3d8   │ │dsound │ │apu     │ │nv2a  │ │input ││
+│  │D3D8→  │ │DSound→│ │MCPX APU│ │NV2A  │ │XPP→  ││
+│  │D3D11/ │ │mixer  │ │(xemu)  │ │(xemu)│ │XInput││
 │  │Vulkan │ │       │ │        │ │      │ │/SDL2 ││
-│  └───────┘ └───────┘ └────────┘ └──────┘ └─────┘│
+│  └───────┘ └───────┘ └────────┘ └──────┘ └──────┘│
 ├──────────────────────────────────────────────────┤
-│  Windows: D3D11, XInput, waveOut, Win32 API       │
-│  Linux: POSIX shims, SDL2, Vulkan presentation    │
+│  Windows: D3D11, XInput, waveOut, Win32 API      │
+│  Linux: POSIX shims, SDL2, Vulkan presentation   │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -274,7 +274,7 @@ xboxrecomp/
 │   ├── apu/                     # xbox_apu    - MCPX APU emulation (xemu)
 │   ├── nv2a/                    # xbox_nv2a   - NV2A GPU emulation (xemu)
 │   └── input/                   # xbox_input  - Gamepad → XInput
-├── src/platform/                 # Linux compatibility shims
+├── src/platform/                # Linux compatibility shims
 ├── include/                     # Public headers
 ├── templates/                   # Starter templates for new projects
 │   └── runtime/                 # Runtime shim templates

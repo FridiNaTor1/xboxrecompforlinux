@@ -254,6 +254,7 @@ See [docs/technical/candidate-games.md](docs/technical/candidate-games.md) for a
 - **[Burnout 3: Takedown](https://github.com/sp00nznet/burnout3)** — The reference implementation. 22,097 functions lifted, full main menu rendering at 60fps, 37 playable tracks with textures, 67 vehicle models, AWD audio playback.
 - **[Wreckless: The Yakuza Missions](https://github.com/sp00nznet/wreckless)** — Xbox launch title (2002). Custom engine, 3,407 functions, boots through CRT init into game main. Debugging early gameplay crash.
 - **[Blood Wake](https://github.com/sp00nznet/bloodwake)** — First-party Microsoft naval combat (2001). Stormfront Studios custom engine. 4,608 functions, 367K lines of C generated (99.1% success). Project scaffolded, working toward first build.
+- **[Full Spectrum Warrior: Ten Hammers](https://github.com/FridiNaTor1/FullSpectrumWarriorTHXBOX)** — Sequel to Full Spectrum Warrior known for it's collab with the US Army. Custom Pandemic ZERO engine with Havok. This is the first XBOX Decomp project aimed directly for Linux, currently using a symbol rich review copy for a almost complete source code tree. Currently doesn't get to menus.
 
 ### What To Expect
 

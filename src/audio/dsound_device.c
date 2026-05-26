@@ -379,6 +379,6 @@ HRESULT xbox_DirectSoundCreate(void *pGuid, IDirectSound8 **ppDS, void *pUnkOute
     (void)pGuid; (void)pUnkOuter;
     if (!ppDS) return E_INVALIDARG;
     *ppDS = &g_dsound;
-    fprintf(stderr, "Audio: DirectSound created (stub - no audio output)\n");
+    fprintf(stderr, "[DSOUND] DirectSound created (APU mixer backed)\n");
     return S_OK;
 }

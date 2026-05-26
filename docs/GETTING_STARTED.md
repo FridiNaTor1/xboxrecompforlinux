@@ -1,6 +1,6 @@
 # Getting Started with Xbox Static Recompilation
 
-This guide walks you through recompiling your first Xbox game, from extracting the XBE to getting the game running. Windows has the D3D11 backend; Linux builds natively with SDL2 input/audio and Vulkan presentation.
+This guide walks you through recompiling your first Xbox game, from extracting the XBE to getting the game running. Windows has the D3D11 backend; Linux builds natively with SDL2 input/audio and Vulkan.
 
 ## What You Need
 
@@ -41,7 +41,7 @@ cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build/linux -j$(nproc)
 ```
 
-Linux currently defaults to `XBOXRECOMP_GRAPHICS_BACKEND=vulkan`, which creates an SDL/Vulkan presentation window. Use `-DXBOXRECOMP_GRAPHICS_BACKEND=null` for headless bring-up.
+Linux currently defaults to `XBOXRECOMP_GRAPHICS_BACKEND=vulkan`, which creates an SDL/Vulkan window and enables the native `XYZRHW` Vulkan draw path. Use `-DXBOXRECOMP_GRAPHICS_BACKEND=null` for headless bring-up.
 
 If you create a local game target under `src/game/`, enable it explicitly:
 

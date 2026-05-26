@@ -6,10 +6,10 @@ project(xboxrecomp VERSION 0.1.0 LANGUAGES C)
 # Pattern: extract emulator subsystems (xemu) into reusable static libraries.
 #
 # Libraries:
-#   xbox_kernel    - Xbox kernel replacement layer (147 imports → Win32)
-#   xbox_d3d8      - D3D8 → D3D11 graphics compatibility
+#   xbox_kernel    - Xbox kernel replacement layer (Win32/POSIX-backed)
+#   xbox_d3d8      - D3D8 → D3D11/Vulkan/null graphics compatibility
 #   xbox_dsound    - DirectSound → software mixer compatibility
-#   xbox_input     - Xbox gamepad → XInput compatibility
+#   xbox_input     - Xbox gamepad → XInput/SDL2 compatibility
 #   xbox_apu       - MCPX APU audio emulation (extracted from xemu)
 #   xbox_nv2a      - NV2A GPU emulation (extracted from xemu)
 
@@ -46,7 +46,7 @@ option(XBOXRECOMP_BUILD_GAME "Build a local game target from src/game when prese
 # Core: Xbox kernel replacement (memory layout, file I/O, threading, sync)
 add_subdirectory(src/kernel)
 
-# Graphics: D3D8 → D3D11 compatibility layer
+# Graphics: D3D8 compatibility layer
 add_subdirectory(src/d3d)
 
 # Audio: DirectSound → software mixer compatibility
@@ -58,7 +58,7 @@ add_subdirectory(src/apu)
 # GPU: NV2A hardware emulation (register handlers, MMIO, push buffer)
 add_subdirectory(src/nv2a)
 
-# Input: Xbox gamepad → XInput
+# Input: Xbox gamepad → host controller APIs
 add_subdirectory(src/input)
 
 # ── Umbrella target ───────────────────────────────────────────

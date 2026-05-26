@@ -9,6 +9,7 @@
 #include "xinput_xbox.h"
 
 #include <SDL.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -22,6 +23,8 @@ typedef struct SDLInputSlot {
 
 static SDLInputSlot g_slots[XBOX_MAX_CONTROLLERS];
 static BOOL g_sdl_ready = FALSE;
+static BOOL g_input_debug = FALSE;
+static BOOL g_input_debug_checked = FALSE;
 
 static BYTE axis_trigger_to_byte(Sint16 value)
 {
@@ -109,6 +112,12 @@ void xbox_InputInit(void)
 {
     if (g_sdl_ready) return;
 
+    if (!g_input_debug_checked) {
+        const char *debug = getenv("XBOXRECOMP_INPUT_DEBUG");
+        g_input_debug = (debug && debug[0] && strcmp(debug, "0") != 0);
+        g_input_debug_checked = TRUE;
+    }
+
     for (int i = 0; i < XBOX_MAX_CONTROLLERS; i++) {
         g_slots[i].instance_id = -1;
     }
@@ -180,6 +189,23 @@ DWORD xbox_InputGetState(DWORD dwPort, XBOX_INPUT_STATE *pState)
 
     if (memcmp(&state.Gamepad, &slot->last_state.Gamepad, sizeof(state.Gamepad)) != 0) {
         slot->packet++;
+        if (g_input_debug) {
+            fprintf(stderr,
+                    "[INPUT] port %u buttons=0x%04X A=%u B=%u X=%u Y=%u LT=%u RT=%u "
+                    "LX=%d LY=%d RX=%d RY=%d\n",
+                    (unsigned)dwPort,
+                    state.Gamepad.wButtons,
+                    state.Gamepad.bAnalogButtons[XBOX_BUTTON_A],
+                    state.Gamepad.bAnalogButtons[XBOX_BUTTON_B],
+                    state.Gamepad.bAnalogButtons[XBOX_BUTTON_X],
+                    state.Gamepad.bAnalogButtons[XBOX_BUTTON_Y],
+                    state.Gamepad.bAnalogButtons[XBOX_BUTTON_LTRIGGER],
+                    state.Gamepad.bAnalogButtons[XBOX_BUTTON_RTRIGGER],
+                    state.Gamepad.sThumbLX,
+                    state.Gamepad.sThumbLY,
+                    state.Gamepad.sThumbRX,
+                    state.Gamepad.sThumbRY);
+        }
     }
     state.dwPacketNumber = slot->packet;
     slot->last_state = state;

@@ -11,11 +11,12 @@
  Static Recompilation Toolkit for Original Xbox Games
 ```
 
-> Turn an Xbox game binary into a native executable. Windows has the current D3D11 rendering backend; Linux now builds natively with SDL2 input/audio and a Vulkan presentation backend.
+> Turn an Xbox game binary into a native executable. Windows has the current D3D11 rendering backend; Linux builds natively with SDL2 input/audio and a Vulkan backend.
 
 ### Recent Changes
 
-- **Native Linux Runtime Build** — The toolkit now configures and builds on Linux. Linux uses POSIX-backed replacements for the Win32 subset used by the runtime, SDL2 for controller/audio output, and a Vulkan presentation backend.
+- **Native Linux Runtime Build** — The toolkit now configures and builds on Linux. Linux uses POSIX-backed replacements for the Win32 subset used by the runtime, SDL2 for controller/audio output, and a Vulkan backend.
+- **Linux Vulkan RHW Path** — The Vulkan backend now has a native fixed-function `XYZRHW` draw path with shader compilation, texture upload, depth clear/test/write support, and whole-call triangle batching. The software/null path remains available for headless bring-up and pixel dumps.
 - **Full Multi-Texture Fixed-Function Pipeline** — 4-stage texture blending with all D3D8 operations (MODULATE, ADD, SUBTRACT, BLEND*, DOTPRODUCT3, etc.), full D3DTA argument resolution (DIFFUSE, CURRENT, TEXTURE, TFACTOR, SPECULAR + COMPLEMENT/ALPHAREPLICATE), and 4 samplers bound per draw.
 - **Hardware T&L Lighting** — Up to 8 lights (directional, point, spot) with material properties, global ambient, specular highlights, and world-space normal transform. Full Blinn-Phong with attenuation and spotlight cones.
 - **Vertex Fog** — Linear/exp/exp2 fog computed in vertex shader, blended with fog color in pixel shader. Fog parameters sourced from D3D8 render states.
@@ -97,7 +98,7 @@ Following the [RexGlueSDK](https://github.com/rexglue/rexglue-sdk) pattern (whic
 | Library | Source | What It Does |
 |---------|--------|-------------|
 | **xbox_kernel** | Custom | Xbox kernel → host OS (Win32 on Windows, POSIX-backed compatibility shim on Linux) |
-| **xbox_d3d8** | Custom | Windows: D3D8 → D3D11 graphics. Linux: Xbox D3D8 ABI backend with SDL/Vulkan window and swapchain presentation; `null` remains available for headless bring-up |
+| **xbox_d3d8** | Custom | Windows: D3D8 → D3D11 graphics. Linux: Xbox D3D8 ABI backend with SDL/Vulkan windowing, software fallback, and a native RHW Vulkan draw path; `null` remains available for headless bring-up |
 | **xbox_dsound** | Custom | DirectSound → software mixer (IDirectSound8/IDirectSoundBuffer8) |
 | **xbox_apu** | xemu | MCPX APU audio (256-voice processor, ADPCM/PCM, envelopes, HRTF; waveOut on Windows, SDL2 queued audio on Linux) |
 | **xbox_nv2a** | xemu+Custom | NV2A GPU register handlers/MMIO/push buffer parsing; PGRAPH routes to D3D11 on Windows or the Linux backend boundary |
@@ -136,6 +137,17 @@ cmake --build build/linux-null -j$(nproc)
 This produces 6 static libraries in `build/src/*/`. Link your game project against `xboxrecomp` (umbrella target) or individual libraries.
 
 `d8vk` is not vendored as a submodule at this stage. It is a D3D8-to-Vulkan DLL for Wine/Windows-style D3D8 callers, while this runtime implements the Xbox D3D8 ABI directly in-process. The Linux renderer should sit behind `xbox_d3d8`/`xbox_nv2a` as a native backend, not as a dropped-in `d3d8.dll`.
+
+### Linux Runtime Debugging
+
+Useful runtime switches:
+
+```bash
+XBOXRECOMP_INPUT_DEBUG=1 ./your_game        # Log SDL/Xbox controller transitions
+XBOXRECOMP_DUMP_FRAME=120 ./your_game       # Dump software framebuffer frame 120 to /tmp/xboxrecomp_frame.ppm
+XBOXRECOMP_DUMP_VULKAN_FRAME=120 ./your_game # Dump Vulkan render target frame 120 to /tmp/xboxrecomp_vulkan_frame.ppm
+XBOXRECOMP_VULKAN_NATIVE=0 ./your_game      # Disable the native Vulkan RHW path and use the software fallback
+```
 
 ### Integration Pattern
 
@@ -177,7 +189,7 @@ The recompiler output (`tools/recomp`) generates these automatically. The xboxre
 │  └───────┘ └───────┘ └────────┘ └──────┘ └──────┘│
 ├──────────────────────────────────────────────────┤
 │  Windows: D3D11, XInput, waveOut, Win32 API      │
-│  Linux: POSIX shims, SDL2, Vulkan presentation   │
+│  Linux: POSIX shims, SDL2, Vulkan backend        │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -231,7 +243,7 @@ cmake --build build --config Release
 bin/your_game.exe
 ```
 
-On Linux the runtime now creates a Vulkan presentation window, accepts SDL2 controllers, and outputs mixed audio through SDL2. Actual NV2A/D3D draw lowering into Vulkan command buffers is still the next renderer milestone.
+On Linux the runtime creates a Vulkan window, accepts SDL2 controllers, outputs mixed audio through SDL2, and can draw pre-transformed D3D8 `XYZRHW` geometry through the native Vulkan path. Full NV2A push-buffer and programmable shader lowering into Vulkan command buffers is still an active renderer milestone.
 
 Game-specific bring-up notes can live under `docs/game-bringup/`; generated game code and proprietary assets should stay out of the neutral runtime fork.
 
@@ -269,7 +281,7 @@ xboxrecomp/
 │   └── recomp/                  # x86 -> C static recompiler
 ├── src/                         # Runtime libraries (C, link-time)
 │   ├── kernel/                  # xbox_kernel - Xbox kernel → host OS
-│   ├── d3d/                     # xbox_d3d8   - D3D8 → D3D11/null graphics
+│   ├── d3d/                     # xbox_d3d8   - D3D8 → D3D11/Vulkan/null graphics
 │   ├── audio/                   # xbox_dsound - DirectSound compat
 │   ├── apu/                     # xbox_apu    - MCPX APU emulation (xemu)
 │   ├── nv2a/                    # xbox_nv2a   - NV2A GPU emulation (xemu)

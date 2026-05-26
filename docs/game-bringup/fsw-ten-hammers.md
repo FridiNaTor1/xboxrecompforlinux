@@ -101,9 +101,9 @@ Fallback-seeded recomp pass results:
 
 ## Current Runtime Notes
 
-- Linux runtime builds with SDL2 input, SDL2 audio, and Vulkan presentation.
+- Linux runtime builds with SDL2 input, SDL2 audio, and the Vulkan backend.
 - The local ignored game target builds as `local_game_recomp` and loads `game_files/default.xbe`.
 - Runtime reaches `_mainCRTStartup`, creates the XAPI startup thread, enters `_mainXapiStartup`, calls `_main`, and returns cleanly.
 - Current next blocker: `_main` exits immediately during early initialization; the import bridge still reports 81 stubbed kernel ordinals.
-- The Vulkan backend currently presents cleared frames; real NV2A/D3D draw lowering is still required for visible gameplay.
+- The Vulkan backend now has the shared `XYZRHW` draw path for early transformed geometry. Full NV2A push-buffer and programmable shader lowering is still required for broader visible gameplay.
 - `fsw.pdb` and `fsw.map` now produce named seed symbols. Generated C uses stable `fn_<VA>_<symbol>` identifiers and keeps the original decorated PDB/MAP symbol in each function comment.

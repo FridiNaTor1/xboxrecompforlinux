@@ -1,6 +1,6 @@
 # xbox_d3d8 — Xbox D3D8 Compatibility
 
-Implements the Xbox's modified Direct3D 8 interface. On Windows this is backed by a Direct3D 11 device. On Linux the default backend uses SDL2 and Vulkan for window/swapchain presentation while preserving the same D3D8 ABI.
+Implements the Xbox's modified Direct3D 8 interface. On Windows this is backed by a Direct3D 11 device. On Linux the default backend uses SDL2 and Vulkan while preserving the same D3D8 ABI.
 
 ## Files
 
@@ -12,8 +12,10 @@ Implements the Xbox's modified Direct3D 8 interface. On Windows this is backed b
 | `d3d8_resources.c` | 541 | Vertex/index buffers, textures, format conversion |
 | `d3d8_shaders.c` | 529 | Shader compilation, input layout, constant buffers |
 | `d3d8_states.c` | 350 | Render state translation (D3D8 → D3D11), sampler states |
-| `d3d8_null.c` | 361 | Portable ABI backend; creates objects and accepts calls |
-| `d3d8_vulkan_host.c` | 500+ | Linux SDL/Vulkan presentation host and swapchain clear path |
+| `d3d8_null.c` | 1,000+ | Portable ABI backend, software fallback rasterizer, texture decode, and Vulkan RHW bridge |
+| `d3d8_vulkan_host.c` | 1,000+ | Linux SDL/Vulkan host, swapchain, render target, depth state, texture upload, and RHW draw submission |
+| `shaders/d3d8_rhw.vert` | - | Vulkan vertex shader for pre-transformed `XYZRHW` geometry |
+| `shaders/d3d8_rhw.frag` | - | Vulkan fragment shader for vertex color and optional texture sampling |
 
 ## Quick Start
 
@@ -41,7 +43,17 @@ d3d8_PresentFrame();
 
 ## Linux Status
 
-The Linux Vulkan backend currently owns the SDL window, Vulkan instance/device/swapchain, and presents cleared frames. D3D8/NV2A draw lowering into Vulkan command buffers is still in progress. The `null` backend remains useful for fast headless kernel/recomp debugging.
+The Linux Vulkan backend owns the SDL window, Vulkan instance/device/swapchain, render target, and depth image. It now has an initial native fixed-function path for pre-transformed `XYZRHW` geometry, including texture upload, depth clear/test/write support, and whole-call triangle batching. This is enough for menu/UI geometry and other already-transformed draw streams seen in early bring-up.
+
+The backend is still intentionally narrow. Full NV2A push-buffer lowering, programmable vertex shader lowering, register-combiner parity, and untransformed fixed-function lighting are still active work. The `null` backend remains useful for fast headless kernel/recomp debugging and software framebuffer dumps.
+
+Useful Linux runtime switches:
+
+```bash
+XBOXRECOMP_DUMP_FRAME=1 ./your_game
+XBOXRECOMP_DUMP_VULKAN_FRAME=1 ./your_game
+XBOXRECOMP_VULKAN_NATIVE=0 ./your_game
+```
 
 ## How It Works
 
